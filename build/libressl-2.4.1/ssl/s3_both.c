@@ -166,6 +166,7 @@ ssl3_do_write(SSL *s, int type)
 int
 ssl3_send_finished(SSL *s, int a, int b, const char *sender, int slen)
 {
+	printf("ssl3_send_finished\n");
 	unsigned char *p;
 	int md_len;
 
@@ -232,6 +233,7 @@ ssl3_take_mac(SSL *s)
 int
 ssl3_get_finished(SSL *s, int a, int b)
 {
+	printf("ssl3_get_finished\n");
 	int al, ok, md_len;
 	long n;
 	CBS cbs;
@@ -300,6 +302,7 @@ f_err:
 int
 ssl3_send_change_cipher_spec(SSL *s, int a, int b)
 {
+	printf("ssl3_send_change_cipher_spec\n");
 	unsigned char *p;
 
 	if (s->state == a) {

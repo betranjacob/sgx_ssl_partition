@@ -73,3 +73,4 @@ opensslinclude_HEADERS += whrlpool.h
 opensslinclude_HEADERS += x509.h
 opensslinclude_HEADERS += x509_vfy.h
 opensslinclude_HEADERS += x509v3.h
+opensslinclude_HEADERS += sgxbridge.h

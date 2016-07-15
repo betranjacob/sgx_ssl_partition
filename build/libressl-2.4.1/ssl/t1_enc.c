@@ -146,6 +146,7 @@
 void
 tls1_cleanup_key_block(SSL *s)
 {
+	printf("tls1_cleanup_key_block\n");
 	if (s->s3->tmp.key_block != NULL) {
 		explicit_bzero(s->s3->tmp.key_block,
 		    s->s3->tmp.key_block_length);
@@ -444,6 +445,7 @@ static int
 tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
     unsigned key_len, const unsigned char *iv, unsigned iv_len)
 {
+	printf("tls1_change_cipher_state\n");
 	const EVP_AEAD *aead = s->s3->tmp.new_aead;
 	SSL_AEAD_CTX *aead_ctx;
 
@@ -709,6 +711,7 @@ err2:
 int
 tls1_setup_key_block(SSL *s)
 {
+	printf("tls1_setup_key_block\n");
 	unsigned char *key_block, *tmp_block = NULL;
 	int mac_type = NID_undef, mac_secret_size = 0;
 	int key_block_len, key_len, iv_len;

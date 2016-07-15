@@ -46,6 +46,7 @@ set(
 	t1_meth.c
 	t1_reneg.c
 	t1_srvr.c
+	sgxbridge.c
 )
 
 if (BUILD_SHARED)

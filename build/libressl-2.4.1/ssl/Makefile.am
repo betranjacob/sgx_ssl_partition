@@ -48,6 +48,7 @@ libssl_la_SOURCES += t1_lib.c
 libssl_la_SOURCES += t1_meth.c
 libssl_la_SOURCES += t1_reneg.c
 libssl_la_SOURCES += t1_srvr.c
+libssl_la_SOURCES += sgxbridge.c
 
 noinst_HEADERS = srtp.h
 noinst_HEADERS += ssl_locl.h

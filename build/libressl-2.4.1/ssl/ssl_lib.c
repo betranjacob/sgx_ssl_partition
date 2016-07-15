@@ -2295,6 +2295,7 @@ ssl_get_auto_dh(SSL *s)
 void
 ssl_update_cache(SSL *s, int mode)
 {
+	printf("ssl_update_cache\n");
 	int	i;
 
 	/*

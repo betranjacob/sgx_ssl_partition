@@ -164,7 +164,11 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 
+#include <openssl/sgxbridge.h>
+
 #include "bytestring.h"
+
+#define OPENSSL_WITH_SGX 1
 
 int
 ssl3_accept(SSL *s)
@@ -721,6 +725,7 @@ ssl3_send_hello_request(SSL *s)
 int
 ssl3_get_client_hello(SSL *s)
 {
+	printf("ssl3_get_client_hello\n");
 	int i, j, ok, al, ret = -1;
 	unsigned int cookie_len;
 	long n;
@@ -795,6 +800,12 @@ ssl3_get_client_hello(SSL *s)
 
 	/* load the client random */
 	memcpy(s->s3->client_random, p, SSL3_RANDOM_SIZE);
+
+	#ifdef OPENSSL_WITH_SGX
+	/* send client random to sgx */
+	sgxbridge_pipe_write(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
+	#endif
+
 	p += SSL3_RANDOM_SIZE;
 
 	/* get the session-id */
@@ -968,7 +979,12 @@ ssl3_get_client_hello(SSL *s)
 	 * server_random before calling tls_session_secret_cb in order to allow
 	 * SessionTicket processing to use it in key derivation.
 	 */
+
+	#ifdef OPENSSL_WITH_SGX
+	sgxbridge_generate_server_random(s->s3->server_random, SSL3_RANDOM_SIZE);
+	#else
 	arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
+	#endif
 
 	if (!s->hit && s->tls_session_secret_cb) {
 		SSL_CIPHER *pref_cipher = NULL;
@@ -1083,6 +1099,7 @@ err:
 int
 ssl3_send_server_hello(SSL *s)
 {
+	printf("ssl3_send_server_hello\n");
 	unsigned char *bufend;
 	unsigned char *p, *d;
 	int sl;
@@ -1153,6 +1170,7 @@ ssl3_send_server_hello(SSL *s)
 int
 ssl3_send_server_done(SSL *s)
 {
+	printf("ssl3_send_Server_done\n");
 	if (s->state == SSL3_ST_SW_SRVR_DONE_A) {
 		ssl3_handshake_msg_start(s, SSL3_MT_SERVER_DONE);
 		ssl3_handshake_msg_finish(s, 0);
@@ -1594,10 +1612,13 @@ err:
 int
 ssl3_get_client_key_exchange(SSL *s)
 {
+	printf("ssl3_get_client_key_exchange\n");
 	int i, al, ok;
 	long n;
 	unsigned long alg_k;
 	unsigned char *d, *p;
+ 	BIO *bio_out;
+
 	RSA *rsa = NULL;
 	EVP_PKEY *pkey = NULL;
 	BIGNUM *pub = NULL;
@@ -1607,6 +1628,8 @@ ssl3_get_client_key_exchange(SSL *s)
 	EVP_PKEY *clnt_pub_pkey = NULL;
 	EC_POINT *clnt_ecpoint = NULL;
 	BN_CTX *bn_ctx = NULL;
+
+	bio_out = BIO_new_fp(stdout, BIO_NOCLOSE);
 
 	/* 2048 maxlen is a guess.  How long a key does that permit? */
 	n = s->method->ssl_get_message(s, SSL3_ST_SR_KEY_EXCH_A,
@@ -1618,6 +1641,7 @@ ssl3_get_client_key_exchange(SSL *s)
 	alg_k = s->s3->tmp.new_cipher->algorithm_mkey;
 
 	if (alg_k & SSL_kRSA) {
+		printf("alg_k: SSL_kRSA\n");
 		char fakekey[SSL_MAX_MASTER_KEY_LENGTH];
 
 		arc4random_buf(fakekey, sizeof(fakekey));
@@ -1634,6 +1658,8 @@ ssl3_get_client_key_exchange(SSL *s)
 		}
 		rsa = pkey->pkey.rsa;
 
+		// RSA_print(bio_out, rsa, 0);
+
 		if (2 > n)
 			goto truncated;
 		n2s(p, i);
@@ -1644,7 +1670,26 @@ ssl3_get_client_key_exchange(SSL *s)
 		} else
 			n = i;
 
+		// encrypted premaster secret
+		printf("encrypted premaster secret:\n");
+		print_hex(p, n);
+
+	 //    char *premaster = "3131423939413437334444454444453332453543313131443232394145383041434137424143394333354439353543314441394345354433363033454631303538334532343834314433453234304539414143433542423341433133384434353841414542444336384545333530343733344144374645463535343733453245";
+		// sgxbridge_pipe_write("premaster", strlen(premaster), premaster);
+
+		#ifdef OPENSSL_WITH_SGX
+		sgxbridge_pipe_write(CMD_PREMASTER, (int)n, (char*)p);
+		#endif
+
+		printf("n: %d\n", (int)n);
+
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
+		printf("i: %d\n", i);
+
+		// decrypted premaster secret
+		printf("decrypted premaster secret:\n");
+		print_hex(p, i);
+
 
 		ERR_clear_error();
 
@@ -1703,12 +1748,28 @@ ssl3_get_client_key_exchange(SSL *s)
 			p = fakekey;
 		}
 
-		s->session->master_key_length =
+		#ifdef OPENSSL_WITH_SGX
+	    /* temporaily (until we can generate session keys) get master secret from enclave */
+	    long algo = ssl_get_algorithm2(s);
+        
+        printf("a: %ld\n", algo);
+	    
+	    sgxbridge_pipe_write(CMD_ALGO, sizeof(long), &algo);
+	    s->session->master_key_length = sgxbridge_get_master_secret(s->session->master_key);
+
+		#else
+	    s->session->master_key_length =
 		    s->method->ssl3_enc->generate_master_secret(s,
 		    s->session->master_key,
 		    p, i);
+		#endif
+		
+		printf("master_secret:\n");
+		print_hex(s->session->master_key, s->session->master_key_length);
+
 		explicit_bzero(p, i);
 	} else if (alg_k & SSL_kDHE) {
+		printf("alg_k: SSL_kDHE\n");
 		if (2 > n)
 			goto truncated;
 		n2s(p, i);
@@ -1762,6 +1823,7 @@ ssl3_get_client_key_exchange(SSL *s)
 	} else
 
 	if (alg_k & (SSL_kECDHE|SSL_kECDHr|SSL_kECDHe)) {
+		printf("alg_k: SSL_kECDHE|SSL_kECDHr|SSL_kECDHe\n");
 		int ret = 1;
 		int key_size;
 		const EC_KEY   *tkey;
@@ -1906,6 +1968,7 @@ ssl3_get_client_key_exchange(SSL *s)
 		return (ret);
 	} else
 	if (alg_k & SSL_kGOST) {
+		printf("alg_k: SSL_kGOST\n");
 		int ret = 0;
 		EVP_PKEY_CTX *pkey_ctx;
 		EVP_PKEY *client_pub_pkey = NULL, *pk = NULL;
@@ -1994,6 +2057,7 @@ err:
 int
 ssl3_get_cert_verify(SSL *s)
 {
+	printf("ssl3_get_cert_verify\n");
 	EVP_PKEY *pkey = NULL;
 	unsigned char *p;
 	int al, ok, ret = 0;
@@ -2422,6 +2486,7 @@ err:
 int
 ssl3_send_server_certificate(SSL *s)
 {
+	printf("ssl3_send_server_certificate\n");
 	unsigned long l;
 	X509 *x;
 
