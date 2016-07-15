@@ -11,7 +11,7 @@ NGINX_LOG_DIR=/var/log/nginx
 
 # set where LibreSSL and nginx will be built
 export BPATH=$(pwd)/build
-export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
+# export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
 
 # names of latest versions of each package
 export NGINX_VERSION=1.11.1
@@ -47,6 +47,8 @@ export SOURCE_OPENSGX=https://github.com/sslab-gatech/opensgx.git
 build_nginx() {
 	# build static LibreSSL
 	echo "Configure & Build LibreSSL"
+	STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
+	# cd $BPATH/$VERSION_LIBRESSL
 	cd $STATICLIBSSL
 	# ./configure LDFLAGS=-lrt --prefix=${STATICLIBSSL}/.openssl/ && make install-strip -j $NB_PROC
 
@@ -122,6 +124,9 @@ build_opensgx() {
 	make -C libsgx
 	make -C user
 
+	# create new key
+	./opensgx -k
+
 	# back to build, prob not necessary
 	cd ../
 }
@@ -195,21 +200,33 @@ prepare_fresh() {
 
 # clean out any files from previous runs of this script
 case "$1" in
-  -c|--clean)
-	sudo rm -rf build
-	mkdir build
-    ;;
+  -h|--help)
+    echo "TODO: usage"
+  ;;
   -d|--download)
 	download_sources
     ;;
   -n|--nginx)
 	build_nginx
   ;;
-  -t|--test)
-    echo "test0"
+  -s|--sgx)
+    build_opensgx
   ;;
+  -c|--clean)
+	sudo rm -rf build
+	mkdir build
+  ;&
   *)
-    echo "test1"
+	# default case
+	sudo rm -rf build
+	mkdir build
+
+    install_dependencies
+    mkdir build
+    download_sources
+    build_opensgx
+    build_nginx
+    prepare_fresh
   ;;
 esac
 
