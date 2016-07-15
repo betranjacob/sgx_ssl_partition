@@ -9,6 +9,7 @@
 #include <ngx_core.h>
 #include <ngx_event.h>
 
+#include <openssl/sgxbridge.h>
 
 #define NGX_SSL_PASSWORD_BUFFER_SIZE  4096
 
@@ -199,6 +200,11 @@ ngx_ssl_init(ngx_log_t *log)
 
     if (ngx_ssl_stapling_index == -1) {
         ngx_ssl_error(NGX_LOG_ALERT, log, 0, "X509_get_ex_new_index() failed");
+        return NGX_ERROR;
+    }
+
+    if (sgxbridge_init() == -1) {
+        ngx_ssl_error(NGX_LOG_ALERT, log, 0, "opensgx_init() failed");
         return NGX_ERROR;
     }
 
@@ -772,6 +778,7 @@ ngx_ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
 static void
 ngx_ssl_info_callback(const ngx_ssl_conn_t *ssl_conn, int where, int ret)
 {
+    printf("ngx_ssl_info_callback\n");
     BIO               *rbio, *wbio;
     ngx_connection_t  *c;
 
