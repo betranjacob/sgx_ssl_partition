@@ -212,6 +212,12 @@ case "$1" in
   -s|--sgx)
     build_opensgx
   ;;
+  -g|--git)
+    install_dependencies
+    build_opensgx
+    build_nginx
+    prepare_fresh
+  ;;
   -c|--clean)
 	sudo rm -rf build
 	mkdir build
