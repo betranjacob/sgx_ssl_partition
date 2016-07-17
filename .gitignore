@@ -14,6 +14,10 @@
 *.la
 *.lo
 
+# exception for precompiled openssl for opensgx
+!build/opensgx/libsgx/libssl.a
+!build/opensgx/libsgx/libcrypto.a
+
 # Shared objects (inc. Windows DLLs)
 *.dll
 *.so

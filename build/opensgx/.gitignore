@@ -140,6 +140,9 @@ user/openssl/*.dll*
 # Exceptions
 !user/openssl/test/bctest
 !user/openssl/crypto/des/times/486-50.sol
+!libsgx/libssl.a
+!libsgx/libcrypto.a
+
 
 # Misc auto generated files
 user/openssl/tools/c_rehash
