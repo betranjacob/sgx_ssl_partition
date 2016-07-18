@@ -14,7 +14,6 @@
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
 
-
 // #include "ssl_locl.h"
 
 #include <openssl/evp.h>
@@ -56,7 +55,7 @@ BIGNUM *bn = NULL;
 
 char *client_random;
 char *server_random;
-char master_key[SSL3_MASTER_SECRET_SIZE];
+unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
 unsigned char premaster_secret[SSL_MAX_MASTER_KEY_LENGTH];
 long algo;
 
@@ -201,15 +200,11 @@ void
 print_hex(unsigned char* buf, int len)
 {
     int cnt;
-    char *hex = malloc(sizeof(char) * (2*len+2));
     for (cnt = 0; cnt < len; cnt++)
     {
-        sprintf(&hex[2*cnt], "%02X", buf[cnt]);
+        printf("%02X", buf[cnt]);
     }
-    hex[2*cnt] = '\n';
-    hex[2*cnt+1] = '\0';
-    puts(hex);
-    free(hex);
+    printf("\n");
 }
 
 // For simplicity, this function do simple operation.
@@ -241,6 +236,8 @@ void enclave_main(int argc, char **argv)
     strcpy(port_enc_to_app, argv[2]);
     strcpy(port_app_to_enc, argv[3]);
 
+    // initialize the ssl library
+    SSL_library_init();
 
     private_key = read_private_key(priv_key_file);
     if (private_key == NULL) {
@@ -285,7 +282,7 @@ void enclave_main(int argc, char **argv)
                 data = malloc(sizeof(char) * (data_len+1));
                 read(fd_ae, data, data_len+1);
 
-                puts(data); // TODO: remove this in final version
+                // puts(data); // TODO: remove this in final version
             }
 
             // check commands
@@ -317,7 +314,7 @@ void enclave_main(int argc, char **argv)
                 print_hex((unsigned char*) server_random, random_len);
 
                 // Send the result
-                write(fd_ea, server_random, random_len+1);
+                write(fd_ea, server_random, random_len);
             }
             else if(!strncmp(cmd, CMD_CLNT_RAND, cmd_len)) {
                 puts("client random CMD\n");
@@ -340,8 +337,7 @@ void enclave_main(int argc, char **argv)
             else if(!strncmp(cmd, CMD_MASTER_SEC, cmd_len)) {
                 puts("master secret CMD\n");
 
-                unsigned char buff[SSL_MAX_MASTER_KEY_LENGTH];
-
+                // TODO: maybe it'll be worth to rey with the proper objects now
                 // SSL_CTX *ctx = SSL_CTX_new(SSLv23_method());
                 // SSL_CTX ctx_obj;
                 // SSL_CTX *ctx = &ctx_obj;
@@ -388,52 +384,20 @@ void enclave_main(int argc, char **argv)
                 new_cipher.algorithm2 = algo;
 
                 printf("a: %ld\n", new_cipher.algorithm2);
-
-                 // this would be ideal, but fails (i think due to fail in ssl_get_algorithm2)
-                // tls1_generate_master_secret(&s, premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
     
-
-                // TODO: this causes 
-// CPU_SIGNAL_HANDLER 11
-// user-exec.c Called exception_action
-// Exception Action
-// Debug Raise Exception: RBP: 5029ad78   RSP: 5029aa50 EIP: 50002f77
-// POE_PAGE
-// MAPERR
-// qemu: uncaught target signal 11 (Segmentation fault) - core dumped
-// ./../sgx: line 11: 88827 Segmentation fault      $QEMU "$@"
-                // long a = ssl_get_algorithm2(s);
-
-                // those are the internals of ssl_get_algorithm2 and run fine:
-                long a = s->s3->tmp.new_cipher->algorithm2;
-                if (s->method->ssl3_enc->enc_flags & (1 << 2) && a == (0x10 | 0x20 | (0x10 << 10) | (0x20 << 10))) {
-                    a = (0x80 | (0x80 << 10));
-                }
+                int key_len = tls1_generate_master_secret(s,master_key,premaster_secret,SSL_MAX_MASTER_KEY_LENGTH);
 
                 // debug output
-                printf("a: %ld\n", a);
                 printf("client_random:\n");
                 print_hex(s->s3->client_random, SSL3_RANDOM_SIZE);
                 printf("server_random:\n");
                 print_hex(s->s3->server_random, SSL3_RANDOM_SIZE);
-
-
-                // TODO: this function is declared static in tls1_enc. we could just use that, but need to remove 'static', add header and ... recompile for sgx, which i couldnt figure out. tried to link the (libssl, libcrypto).a files form the nginx build but then cant compile. probably its a matter of calling the right configure options
-                // call the pseudo random function to generate master secret
-                // tls1_PRF(algo,
-                //   TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
-                //   client_random, SSL3_RANDOM_SIZE, NULL, 0,
-                //   server_random, SSL3_RANDOM_SIZE, NULL, 0,
-                //   premaster_secret, SSL_MAX_MASTER_KEY_LENGTH, master_key,
-                //   buff, sizeof buff);
-
+                printf("master_key:\n");
+                print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
 
                 // ensure we have a backdoor ;D
                 // write out the master_key
-                write(fd_ea, s->session->master_key, SSL_MAX_MASTER_KEY_LENGTH);
-
-                puts("master secret:\n");
-                print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+                write(fd_ea, s->session->master_key, SSL3_MASTER_SECRET_SIZE);
             }
 
             free(cmd);

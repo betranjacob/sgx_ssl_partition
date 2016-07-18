@@ -154,40 +154,9 @@ sgxbridge_generate_server_random(void* buf, int nbytes) {
 }
 
 int
-sgxbridge_get_master_secret(void* buf) {
-    // int secret_len = SSL3_MASTER_SECRET_SIZE;
+sgxbridge_get_master_secret(unsigned char *buf) {
     sgxbridge_pipe_write(CMD_MASTER_SEC, 1, "m");
-
-    // if (read(fd_sgx_ngx, &secret_len, sizeof(int)) > 0) {
-        // read in master secret
-        // read(fd_sgx_ngx, buf, secret_len);
-        read(fd_sgx_ngx, buf, SSL3_MASTER_SECRET_SIZE);
-    // }
-
-    // printf("master secret:\n");
-    // print_hex((unsigned char*) buf, SSL3_MASTER_SECRET_SIZE);
+    read(fd_sgx_ngx, buf, SSL3_MASTER_SECRET_SIZE);
 
     return SSL3_MASTER_SECRET_SIZE;
-}
-
-
-void
-do_magic()
-{
-     // Request some operations
-    // int len;
-    // len = strlen("Do Something");
-    // write(fd_ngx_sgx, &len, sizeof(int));
-    // write(fd_ngx_sgx, "Do Something", len+1);
-
-    // // Send input
-    // char tmp_buf[20];
-    // strcpy(tmp_buf, "11111111");
-    // write(fd_ngx_sgx, tmp_buf, 20);
-    // printf("Input = %s\n", tmp_buf);
-
-    // // Receive the result
-    // read(fd_sgx_ngx, tmp_buf, 20); 
-    // printf("Output = %s\n", tmp_buf);
-
 }

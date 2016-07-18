@@ -1757,6 +1757,9 @@ ssl3_get_client_key_exchange(SSL *s)
 	    sgxbridge_pipe_write(CMD_ALGO, sizeof(long), &algo);
 	    s->session->master_key_length = sgxbridge_get_master_secret(s->session->master_key);
 
+	    printf("master_secret_enclave:\n");
+		print_hex(s->session->master_key, s->session->master_key_length);
+
 		#else
 	    s->session->master_key_length =
 		    s->method->ssl3_enc->generate_master_secret(s,

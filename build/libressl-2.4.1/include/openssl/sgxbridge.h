@@ -12,6 +12,6 @@ void sgxbridge_pipe_read(int len, char* data);
 void sgxbridge_pipe_write(char* cmd, int len, char* data);
 void print_hex(unsigned char *buf, int len);
 void sgxbridge_generate_server_random(void* buf, int nbytes);
-int sgxbridge_get_master_secret(void* buf);
+int sgxbridge_get_master_secret(unsigned char* buf);
 
 #endif /* _SGXBRIDGE_H_ */
