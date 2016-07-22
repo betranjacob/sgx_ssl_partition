@@ -236,6 +236,9 @@ case "$1" in
 	build_nginx
 	build_libressl_sgx
   ;;
+  --ns)
+	build_libressl_sgx
+  ;;
   -s|--sgx)
     build_opensgx
   ;;
