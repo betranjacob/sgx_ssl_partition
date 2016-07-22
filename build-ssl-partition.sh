@@ -9,10 +9,6 @@ NB_PROC=$(grep -c ^processor /proc/cpuinfo)
 # set the log folder
 NGINX_LOG_DIR=/var/log/nginx
 
-# set where LibreSSL and nginx will be built
-export BPATH=$(pwd)/build
-# export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
-
 # names of latest versions of each package
 export NGINX_VERSION=1.11.1
 export VERSION_PCRE=pcre-8.38
@@ -29,6 +25,11 @@ export SOURCE_NGINX=http://nginx.org/download/
 #export SOURCE_PAGESPEED=https://github.com/pagespeed/ngx_pagespeed/archive/
 export SOURCE_OPENSGX=https://github.com/sslab-gatech/opensgx.git
 
+# set where LibreSSL and nginx will be built
+export BPATH=$(pwd)/build
+export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
+
+# TODO: 
 # print_usage() {
 #   cat <<EOF
 # [usage] $0 [option]... [binary]
@@ -47,10 +48,12 @@ export SOURCE_OPENSGX=https://github.com/sslab-gatech/opensgx.git
 build_nginx() {
 	# build static LibreSSL
 	echo "Configure & Build LibreSSL"
-	STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
+	
 	# cd $BPATH/$VERSION_LIBRESSL
 	cd $STATICLIBSSL
 	# ./configure LDFLAGS=-lrt --prefix=${STATICLIBSSL}/.openssl/ && make install-strip -j $NB_PROC
+
+	echo $(pwd)
 
 	#no strip for callgrind
 	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
@@ -115,20 +118,34 @@ build_opensgx() {
 	# Compile QEMU
 	cd qemu
 	./configure-arch
-	make -j $(NB_PROC)
+	make -j $NB_PROC
 
 	# Back to opensgx/
 	cd ..
 
 	# Compile sgx library and user-level code
 	make -C libsgx
-	make -C user
+	# make -C user
 
 	# create new key
 	./opensgx -k
 
 	# back to build, prob not necessary
 	cd ../
+}
+
+build_libressl_sgx() {
+	echo "Configure & Build LibreSSL for OpenSGX"
+
+	LIBRESSL_SGX_PATH=$BPATH/opensgx/libsgx/libressl
+	MUSL_LIBC_PATH=$BPATH/opensgx/libsgx/musl-libc
+
+	cd $LIBRESSL_SGX_PATH
+
+	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
+
+	cd $BPATH
+	cd ..
 }
 
 download_sources() {
@@ -175,6 +192,12 @@ prepare_fresh() {
 	if [ ! -d $NGINX_LOG_DIR ]; then
 		sudo mkdir $NGINX_LOG_DIR
 	fi
+	if [ ! -d $BPATH/opensgx/libsgx/libressl/ ]; then
+		echo "Copying libressl to opensgx"
+		cp -r $STATICLIBSSL/ $BPATH/opensgx/libsgx/libressl/
+		cd $BPATH/opensgx/libsgx/libressl/
+		make clean
+	fi
 
 	CONF="/etc/nginx/nginx.conf"
 	MIME="/etc/nginx/mime.types"
@@ -195,6 +218,9 @@ prepare_fresh() {
 		sudo mkdir SSL_CRT_DIR
 		sudo printf "GB\nLondon\nLondon\nUCL\nNCS\nlocalhost\nfoo@localhost\n" | openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout $SSL_CRT_DIR/nginx.key -out $SSL_CRT_DIR/nginx.crt
 	fi
+
+	cd $BPATH
+	cd ..
 }
 
 
@@ -208,6 +234,7 @@ case "$1" in
     ;;
   -n|--nginx)
 	build_nginx
+	build_libressl_sgx
   ;;
   -s|--sgx)
     build_opensgx
@@ -217,6 +244,7 @@ case "$1" in
     build_opensgx
     build_nginx
     prepare_fresh
+    build_libressl_sgx
   ;;
   -c|--clean)
 	sudo rm -rf build
@@ -233,6 +261,7 @@ case "$1" in
     build_opensgx
     build_nginx
     prepare_fresh
+    build_libressl_sgx
   ;;
 esac
 

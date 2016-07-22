@@ -241,10 +241,12 @@ start:
 		close(fd);
 		goto nodevrandom;
 	}
-	if (ioctl(fd, RNDGETENTCNT, &cnt) == -1) {
-		close(fd);
-		goto nodevrandom;
-	}
+	// opensgx does not support RNDGETENTCNT ioctl
+	// TODO: figure out more elegant way
+	//if (ioctl(fd, RNDGETENTCNT, &cnt) == -1) {
+	//	close(fd);
+	//	goto nodevrandom;
+	//}
 	for (i = 0; i < len; ) {
 		size_t wanted = len - i;
 		ssize_t ret = read(fd, (char *)buf + i, wanted);
