@@ -17,7 +17,7 @@
 char TMP_DIRECTORY_CONF[] = "/tmp/ipc_conf";
 char TMP_DIRECTORY_RUN[] = "/tmp/ipc_run";
 char TMP_FILE_NUMBER_FMT[] =  "/pipe_";
-int NAME_BUF_SIZE = 256;
+
 
 
 int fd_sgx_ngx = -1;

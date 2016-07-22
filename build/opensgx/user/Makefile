@@ -11,22 +11,22 @@ SGX_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSGXDIR)/libsgx.a \
 
 # LIBRESSL LIB
 # LIBRESSLDIR = ../../build/libressl-2.4.1  # relative doesnt seem to work
-LIBRESSLDIR = /home/osboxes/Documents/scripts/build/libressl-2.4.1
-LIBSSLDIR = $(LIBRESSLDIR)/.openssl/lib
+LIBRESSLDIR = /home/osboxes/Documents/tmp/ssl-partition/build/opensgx/libsgx/libressl
+LIBSSLDIR = $(LIBRESSLDIR)
 
 # OpenSSL Cases
-OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/openssl/include
+#OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/openssl/include
 # uncomment for libressl TODO: need to compile for qemu ;/
-# OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBRESSLDIR)/include
+OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/libressl/include
 
-OPENSSL_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSGXDIR)/libssl.a \
-               $(LIBSGXDIR)/libcrypto.a $(LIBSGXDIR)/libsgx.a \
+#OPENSSL_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSGXDIR)/libssl.a \
+#               $(LIBSGXDIR)/libcrypto.a $(LIBSGXDIR)/libsgx.a \
+#               $(LIBSGXDIR)/libc-sgx.a
+
+# uncomment for libressl
+OPENSSL_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSSLDIR)/ssl/.libs/libssl.a \
+               $(LIBSSLDIR)/crypto/.libs/libcrypto.a $(LIBSGXDIR)/libsgx.a \
                $(LIBSGXDIR)/libc-sgx.a
-
-# uncomment for libressl TODO: need to compile for qemu ;/
-# OPENSSL_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSSLDIR)/libssl.a \
-#                $(LIBSSLDIR)/libcrypto.a $(LIBSGXDIR)/libsgx.a \
-#                $(LIBSGXDIR)/libc-sgx.a
 
 # Host code/tool
 SGX_HOST_RUNTIME = sgx-runtime.o sgx-host.o

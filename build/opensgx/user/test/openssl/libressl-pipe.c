@@ -20,8 +20,12 @@
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 
+#include <openssl/sgxbridge.h>
+
 
 #define PRIVATE_KEY_FILE_SIZE 1733
+
+#define NAME_BUF_SIZE 256
 
 // TODO: this resides in ssl_locl.h, figure out how to include it
  typedef struct ssl3_enc_method {
@@ -72,10 +76,10 @@ long algo;
 // has to be the same file you use for nginx
 char priv_key_file[] = "/home/osboxes/Documents/scripts/buildsgx/opensgx/user/test/keys/nginx.pem";
 
-char TMP_DIRECTORY_CONF[] = "/tmp/ipc_conf";
-char TMP_DIRECTORY_RUN[] = "/tmp/ipc_run";
-char TMP_FILE_NUMBER_FMT[] =  "/pipe_";
-int NAME_BUF_SIZE = 256;
+// char TMP_DIRECTORY_CONF[] = "/tmp/ipc_conf";
+// char TMP_DIRECTORY_RUN[] = "/tmp/ipc_run";
+// char TMP_FILE_NUMBER_FMT[] =  "/pipe_";
+// int NAME_BUF_SIZE = 256;
 
 SSL ssl_obj;
 SSL3_STATE s3;
@@ -83,66 +87,66 @@ SSL_SESSION session;
 SSL_CIPHER new_cipher;
 SSL_CTX *ctx;
 
-static int pipe_init(int flag_dir)
-{
-	int ret;
+// static int pipe_init(int flag_dir)
+// {
+// 	int ret;
 
-	if(flag_dir == 0)
-		ret = mkdir(TMP_DIRECTORY_CONF, 0770);
-	else if(flag_dir == 1)
-		ret = mkdir(TMP_DIRECTORY_RUN, 0770);
+// 	if(flag_dir == 0)
+// 		ret = mkdir(TMP_DIRECTORY_CONF, 0770);
+// 	else if(flag_dir == 1)
+// 		ret = mkdir(TMP_DIRECTORY_RUN, 0770);
 
-	if(ret == -1)
-	{
-		if(errno != EEXIST) {
-                puts("Fail to mkdir");
-                return -1;
-        }
-	}
-	return 0;
-}
+// 	if(ret == -1)
+// 	{
+// 		if(errno != EEXIST) {
+//                 puts("Fail to mkdir");
+//                 return -1;
+//         }
+// 	}
+// 	return 0;
+// }
 
-static int pipe_open(char *unique_id, int is_write, int flag_dir)
-{
-	char name_buf[NAME_BUF_SIZE];
+// static int pipe_open(char *unique_id, int is_write, int flag_dir)
+// {
+// 	char name_buf[NAME_BUF_SIZE];
 
-    if (flag_dir == 0) {
-        strcpy(name_buf, TMP_DIRECTORY_CONF);
-        strcpy(name_buf+strlen(name_buf), TMP_FILE_NUMBER_FMT);
-        strcpy(name_buf+strlen(name_buf), unique_id);
-    }
-    else if (flag_dir == 1) {
-        strcpy(name_buf, TMP_DIRECTORY_RUN);
-        strcpy(name_buf+strlen(name_buf), TMP_FILE_NUMBER_FMT);
-        strcpy(name_buf+strlen(name_buf), unique_id);
-    }
+//     if (flag_dir == 0) {
+//         strcpy(name_buf, TMP_DIRECTORY_CONF);
+//         strcpy(name_buf+strlen(name_buf), TMP_FILE_NUMBER_FMT);
+//         strcpy(name_buf+strlen(name_buf), unique_id);
+//     }
+//     else if (flag_dir == 1) {
+//         strcpy(name_buf, TMP_DIRECTORY_RUN);
+//         strcpy(name_buf+strlen(name_buf), TMP_FILE_NUMBER_FMT);
+//         strcpy(name_buf+strlen(name_buf), unique_id);
+//     }
 
-    unlink(name_buf);
-	int ret = mknod(name_buf, S_IFIFO | 0770, 0);
-	if(ret == -1)
-	{
-        if(errno != EEXIST) {
-            puts("Fail to mknod");
-            return -1;
-        }
-	}
+//     unlink(name_buf);
+// 	int ret = mknod(name_buf, S_IFIFO | 0770, 0);
+// 	if(ret == -1)
+// 	{
+//         if(errno != EEXIST) {
+//             puts("Fail to mknod");
+//             return -1;
+//         }
+// 	}
 
-    int flag = O_ASYNC;
-	if(is_write)
-		flag |= O_WRONLY;
-	else
-		flag |= O_RDONLY;
+//     int flag = O_ASYNC;
+// 	if(is_write)
+// 		flag |= O_WRONLY;
+// 	else
+// 		flag |= O_RDONLY;
 
-	int fd = open(name_buf, flag);
+// 	int fd = open(name_buf, flag);
 
-    if(fd == -1)
-    {
-        puts("Fail to open");
-        return -1;
-    }
+//     if(fd == -1)
+//     {
+//         puts("Fail to open");
+//         return -1;
+//     }
 
-    return fd;
-}
+//     return fd;
+// }
 
 EVP_PKEY* read_private_key(char *key_file) {
     EVP_PKEY *pPrivKey;
@@ -196,16 +200,16 @@ EVP_PKEY* read_private_key(char *key_file) {
 }
 
 // thought printf doesnt work in an enclave..
-void
-print_hex(unsigned char* buf, int len)
-{
-    int cnt;
-    for (cnt = 0; cnt < len; cnt++)
-    {
-        printf("%02X", buf[cnt]);
-    }
-    printf("\n");
-}
+// void
+// print_hex(unsigned char* buf, int len)
+// {
+//     int cnt;
+//     for (cnt = 0; cnt < len; cnt++)
+//     {
+//         printf("%02X", buf[cnt]);
+//     }
+//     printf("\n");
+// }
 
 // For simplicity, this function do simple operation.
 // In the realistic scenario, key creation, signature generation and etc will be
@@ -252,17 +256,17 @@ void enclave_main(int argc, char **argv)
 
 
     // create and open pipes
-    if(pipe_init(0) < 0) {
+    if(opensgx_pipe_init(0) < 0) {
             puts("Error in pipe_init");
             sgx_exit(NULL);
     }
 
-    if((fd_ea = pipe_open(port_enc_to_app, RB_MODE_WR, 0)) < 0) {
+    if((fd_ea = opensgx_pipe_open(port_enc_to_app, RB_MODE_WR, 0)) < 0) {
             puts("Error in ea pipe_open");
             sgx_exit(NULL);
     }
 
-    if((fd_ae = pipe_open(port_app_to_enc, RB_MODE_RD, 0)) < 0) {
+    if((fd_ae = opensgx_pipe_open(port_app_to_enc, RB_MODE_RD, 0)) < 0) {
             puts("Error in ae pipe_open");
             sgx_exit(NULL);
     }
@@ -383,12 +387,12 @@ void enclave_main(int argc, char **argv)
                 memcpy(s->s3->server_random, server_random, SSL3_RANDOM_SIZE);
                 new_cipher.algorithm2 = algo;
 
-                printf("a: %ld\n", new_cipher.algorithm2);
+                // printf("a: %ld\n", new_cipher.algorithm2);
     
                 int key_len = tls1_generate_master_secret(s,master_key,premaster_secret,SSL_MAX_MASTER_KEY_LENGTH);
 
                 // debug output
-                printf("client_random:\n");
+                printf(".client_random:\n");
                 print_hex(s->s3->client_random, SSL3_RANDOM_SIZE);
                 printf("server_random:\n");
                 print_hex(s->s3->server_random, SSL3_RANDOM_SIZE);
