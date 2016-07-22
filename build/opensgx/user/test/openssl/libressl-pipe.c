@@ -105,9 +105,6 @@ typedef struct {
 
 static cmd_t _commands[MAX_COMMANDS];
 
-char port_enc_to_app[NAME_BUF_SIZE];
-char port_app_to_enc[NAME_BUF_SIZE];
-
 EVP_PKEY* private_key = NULL;
 RSA *rsa = NULL;
 
@@ -116,6 +113,7 @@ SSL *ssl;
 SSL_CIPHER new_cipher;
 
 
+// TODO: store these properly in a structure / session store
 char *client_random;
 char *server_random;
 unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
@@ -159,31 +157,39 @@ char cert_file[] = "/home/osboxes/Documents/tmp/ssl-partition/build/opensgx/user
 /* main operation. communicate with tor-gencert & tor process */
 void enclave_main(int argc, char **argv)
 {
-    if(argc != 4) {
-        printf("Usage: ./test.sh sgx-tor [PORT_ENCLAVE_TO_APP] [PORT_APP_TO_ENCLAVE]\n");
+    if(argc != 2) {
+        printf("Usage: ./test.sh test/openssl/libressl-pipe\n");
         sgx_exit(NULL);
     }
-
-    strcpy(port_enc_to_app, argv[2]);
-    strcpy(port_app_to_enc, argv[3]);
 
     // initialize the ssl library
     SSL_library_init();
     SSL_load_error_strings();
 
-    /* Create a SSL_CTX structure */
+    /* Create an SSL_CTX structure */
     create_context();
 
+    /* initialize the commnads */
     register_commands();
 
-    // this now happens in SSL_library_init
-    // open_pipes();
-
-    // pipe read loop -> fetch in command_len -> command -> data_len -> data
+    // pipe read loop:
+    //   -> fetch in command_len -> command -> data_len -> data
+    //   -> call the appriopriate command function
     while(1) {
         run_command_loop();
     }
 }
+
+// just some debug output
+void print_session_params(SSL *s)
+{
+    printf("client_random:\n");
+    print_hex(s->s3->client_random, SSL3_RANDOM_SIZE);
+    printf("server_random:\n");
+    print_hex(s->s3->server_random, SSL3_RANDOM_SIZE);
+    printf("master_key:\n");
+    print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+}   
 
 // TODO: should the ctx be a parameter? other stuff?
 void create_context()
@@ -211,11 +217,12 @@ void create_context()
     // private_key = SSL_CTX_get0_privatekey(ctx);
     private_key = ctx->cert->key->privatekey;
 
-    //get just the rsa key
+    // get just the rsa key
     rsa = private_key->pkey.rsa;
 
 }
 
+// initialize the commnd array
 void register_commands()
 {
     register_command(CMD_PREMASTER, cmd_premaster);
@@ -225,60 +232,64 @@ void register_commands()
     register_command(CMD_MASTER_SEC, cmd_mastersec);
     register_command(CMD_RSA_SIGN, cmd_rsasign);
     register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsasignsigalg);
-
 }
 
+// needs to be called before the command can be used
 void register_command(char* name, void (*callback)(int, char*))
 {
+    // just add it to our static array.
     if (cmd_counter < MAX_COMMANDS) {
         _commands[cmd_counter].name = name;
         _commands[cmd_counter++].callback = callback;
     }
     else {
         // TODO: error, too many commands
+        printf("ERROR: command array full, increase MAX_COMMANDS\n");
     }
 }
 
+// tries to match incoming command to a registered one, executes if found
 void check_commands(int cmd_len, char *cmd, int data_len, char* data)
 {
-    // printf("check_commands\n");
     cmd_t *command;
     int i;
 
+    // just in case
     if(cmd == NULL) {
         return;
     }
 
-    // printf("cmd != NULL\n");
-    // print_hex(cmd, cmd_len);
-
+    // for each registered command try to match its name with what we received
     for (i=0; i<cmd_counter; i++) {
         command = &_commands[i];
-        // printf("checking..%s\n", command->name);
-        
+
         // check commands
         if(!strncmp(command->name, cmd, cmd_len)) {
-            // printf("match: %s\n", cmd);
+            printf("execuitng command: %s\n", command->name);
             command->callback(data_len, data);
+            // dont need to check further
             return;
         }
     }
 }
 
+// reads in an operation (in form cmd_len, cmd, data_len, data) from named pipe
+// and executes the corresponding command
 void run_command_loop()
 {
-    char buf1[CMD_MAX_BUF_SIZE];
-    char buf2[CMD_MAX_BUF_SIZE];
-
     char *cmd, *data;
     int cmd_len, data_len;
 
+    // TODO: figure out how to assign dynamically in sgxbridge_fetch_operation
+    char buf1[CMD_MAX_BUF_SIZE];
+    char buf2[CMD_MAX_BUF_SIZE];
     cmd = buf1;
     data = buf2;
 
     // read in operation
     if(sgxbridge_fetch_operation(&cmd_len, cmd, &data_len, data)) {
         
+        // DEBUG
         // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
         // printf("cmd:\n");
         // print_hex(cmd, cmd_len);
@@ -288,6 +299,8 @@ void run_command_loop()
         check_commands(cmd_len, cmd, data_len, data);
     }
     else {
+        // we shouldnt really end up here in normal conditions
+        // sgxbridge_fetch_operation does a blocking read on named pipes
         // puts("empty\n");
     }
 
@@ -301,18 +314,16 @@ void run_command_loop()
 
 void cmd_premaster(int data_len, char* data)
 {
-    puts("premaster CMD\n");
-
     // decrypt premaster secret (TODO: need to do anyt with i?)
     int i = RSA_private_decrypt(data_len, (unsigned char *) data, premaster_secret, rsa, RSA_PKCS1_PADDING);
 
+    // DEBUG
     puts("decrypted premaster secret:\n");
     print_hex(premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
 }
 
 void cmd_srvrand(int data_len, char* data)
 {
-    puts("generate server random CMD\n");
     int random_len = *((int *) data);
 
     free(server_random);
@@ -326,6 +337,7 @@ void cmd_srvrand(int data_len, char* data)
         server_random[i] = 4;
     }
 
+    // DEBUG
     puts("server random:\n");
     print_hex((unsigned char*) server_random, random_len);
 
@@ -335,30 +347,26 @@ void cmd_srvrand(int data_len, char* data)
 
 void cmd_clntrand(int data_len, char* data)
 {
-    puts("client random CMD\n");
-                
     free(client_random);
     client_random = malloc(sizeof(char) * data_len);
     memcpy(client_random, data, data_len);
 
+    // DOEBUG
     puts("client random:\n");
     print_hex(client_random, data_len);
 }
 
 void cmd_algo(int data_len, char* data)
 {
-    puts("algo CMD\n");
-    
     algo = *((long *) data);
 
+    // DEBUG
     puts("algo:\n");
     print_hex(&algo, data_len);
 }
 
 void cmd_mastersec(int data_len, char* data)
 {
-    puts("master secret CMD\n");
-
     SSL *s = SSL_new(ctx);
     ssl_get_new_session(s, 1); // creates new session object
     s->s3->tmp.new_cipher = &new_cipher;  // TODO: find function equivalent
@@ -368,17 +376,10 @@ void cmd_mastersec(int data_len, char* data)
     memcpy(s->s3->server_random, server_random, SSL3_RANDOM_SIZE);
     new_cipher.algorithm2 = algo;
 
-    printf("a: %ld\n", new_cipher.algorithm2);
-
     int key_len = tls1_generate_master_secret(s,s->session->master_key,premaster_secret,SSL_MAX_MASTER_KEY_LENGTH);
 
-    // debug output
-    printf("client_random:\n");
-    print_hex(s->s3->client_random, SSL3_RANDOM_SIZE);
-    printf("server_random:\n");
-    print_hex(s->s3->server_random, SSL3_RANDOM_SIZE);
-    printf("master_key:\n");
-    print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+    // DEBUG
+    print_session_params(s);
 
     // ensure we have a backdoor ;D
     // write out the master_key
