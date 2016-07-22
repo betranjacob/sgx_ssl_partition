@@ -116,12 +116,8 @@ RSA *rsa = NULL;
 
 SSL_CTX *ctx;
 SSL *ssl;
-
-SSL ssl_obj;
-SSL3_STATE s3;
-SSL_SESSION session;
 SSL_CIPHER new_cipher;
-SSL_CTX *ctx;
+
 
 char *client_random;
 char *server_random;
@@ -275,7 +271,7 @@ void check_commands(int cmd_len, char *cmd, int data_len, char* data)
         command = &_commands[i];
         // check commands
         if(!strncmp(command->name, cmd, cmd_len)) {
-            printf("match: %s", command->name);
+            printf("match: %s\n", command->name);
             command->callback(data_len, data);
             return;
         }
@@ -377,22 +373,16 @@ void cmd_mastersec(int data_len, char* data)
 {
     puts("master secret CMD\n");
 
-    SSL *s = &ssl_obj;
-    s3.tmp.new_cipher = &new_cipher;
-    s->s3 = &s3;
-    s->session = &session;
-    s->method = SSLv23_method();              
-
-    // tls1_generate_master_secret fails with the below
-    // SSL *s = SSL_new(ctx);
+    SSL *s = SSL_new(ctx);
+    ssl_get_new_session(s, 1); // creates new session object
+    s->s3->tmp.new_cipher = &new_cipher;  // TODO: find function equivalent
 
     // copy in current connection's values
     memcpy(s->s3->client_random, client_random, SSL3_RANDOM_SIZE);
     memcpy(s->s3->server_random, server_random, SSL3_RANDOM_SIZE);
-    // s->s3->tmp.new_cipher.algorithm2 = algo;
     new_cipher.algorithm2 = algo;
 
-    // printf("a: %ld\n", new_cipher.algorithm2);
+    printf("a: %ld\n", new_cipher.algorithm2);
 
     int key_len = tls1_generate_master_secret(s,s->session->master_key,premaster_secret,SSL_MAX_MASTER_KEY_LENGTH);
 
@@ -416,12 +406,11 @@ void cmd_rsasign(int data_len, char* data)
     int sig_size = 0;
 
     printf("\n Message Digest : len(%d) ", data_len);
-    // fflush(stdout);
     print_hex(md_buf, data_len);
 
     if(RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size, private_key->pkey.rsa) <= 0)
     {
-            puts("Error Signing message Digest \n");
+        puts("Error Signing message Digest \n");
     }
 
     printf("\n Signature : len(%d) ", sig_size);

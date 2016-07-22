@@ -136,7 +136,8 @@ print_hex(unsigned char *buf, int len)
     {
         printf("%02X", buf[cnt]);
     }
-    printf("\n");
+    printf("\n\r");
+    fflush(stdout);
 }
 
 void

@@ -38,3 +38,8 @@
 
 # Mac files
 *.DS_Store
+
+# configurations
+build/libressl-2.4.1/.openssl/*
+*.pc
+*.lai
