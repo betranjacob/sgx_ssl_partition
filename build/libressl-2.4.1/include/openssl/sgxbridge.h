@@ -6,6 +6,8 @@
 #define CMD_CLNT_RAND "clntrand"
 #define CMD_MASTER_SEC "mastersec"
 #define CMD_ALGO "algo"
+#define CMD_RSA_SIGN "rsa_sign"
+#define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
 
 #define NAME_BUF_SIZE 256
 
@@ -17,5 +19,6 @@ void sgxbridge_pipe_write(char* cmd, int len, char* data);
 void print_hex(unsigned char *buf, int len);
 void sgxbridge_generate_server_random(void* buf, int nbytes);
 int sgxbridge_get_master_secret(unsigned char* buf);
+void sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size, unsigned char* op_sig, int *sig_size);
 
 #endif /* _SGXBRIDGE_H_ */

@@ -168,7 +168,10 @@
 
 #include "bytestring.h"
 
-#define OPENSSL_WITH_SGX 1
+#define ENTER() fprintf(stderr, "%s >>Enter>> %s() \n", __FILE__, __func__);
+#define EXIT() fprintf(stderr, "%s <<Exit<< %s() \n\n", __FILE__, __func__);
+
+#define OPENSSL_WITH_SGX
 
 int
 ssl3_accept(SSL *s)
@@ -178,6 +181,7 @@ ssl3_accept(SSL *s)
 	int ret = -1;
 	int new_state, state, skip = 0;
 
+	ENTER()
 	ERR_clear_error();
 	errno = 0;
 
@@ -705,12 +709,14 @@ end:
 	s->in_handshake--;
 	if (cb != NULL)
 		cb(s, SSL_CB_ACCEPT_EXIT, ret);
+	EXIT()
 	return (ret);
 }
 
 int
 ssl3_send_hello_request(SSL *s)
 {
+	ENTER()
 	if (s->state == SSL3_ST_SW_HELLO_REQ_A) {
 		ssl3_handshake_msg_start(s, SSL3_MT_HELLO_REQUEST);
 		ssl3_handshake_msg_finish(s, 0);
@@ -719,13 +725,14 @@ ssl3_send_hello_request(SSL *s)
 	}
 
 	/* SSL3_ST_SW_HELLO_REQ_B */
+	EXIT()
 	return (ssl3_handshake_write(s));
 }
 
 int
 ssl3_get_client_hello(SSL *s)
 {
-	printf("ssl3_get_client_hello\n");
+	ENTER()
 	int i, j, ok, al, ret = -1;
 	unsigned int cookie_len;
 	long n;
@@ -1163,6 +1170,7 @@ ssl3_send_server_hello(SSL *s)
 		ssl3_handshake_msg_finish(s, p - d);
 	}
 
+	EXIT()
 	/* SSL3_ST_SW_SRVR_HELLO_B */
 	return (ssl3_handshake_write(s));
 }
@@ -1170,14 +1178,14 @@ ssl3_send_server_hello(SSL *s)
 int
 ssl3_send_server_done(SSL *s)
 {
-	printf("ssl3_send_Server_done\n");
+	ENTER()
 	if (s->state == SSL3_ST_SW_SRVR_DONE_A) {
 		ssl3_handshake_msg_start(s, SSL3_MT_SERVER_DONE);
 		ssl3_handshake_msg_finish(s, 0);
 
 		s->state = SSL3_ST_SW_SRVR_DONE_B;
 	}
-
+	EXIT()
 	/* SSL3_ST_SW_SRVR_DONE_B */
 	return (ssl3_handshake_write(s));
 }
@@ -1207,6 +1215,7 @@ ssl3_send_server_key_exchange(SSL *s)
 	int nr[4], kn;
 	BUF_MEM *buf;
 	EVP_MD_CTX md_ctx;
+	int k;
 
 	EVP_MD_CTX_init(&md_ctx);
 	if (s->state == SSL3_ST_SW_KEY_EXCH_A) {
@@ -1471,17 +1480,40 @@ ssl3_send_server_key_exchange(SSL *s)
 					q += i;
 					j += i;
 				}
+#ifdef OPENSSL_WITH_SGX
+				printf("Message Digest : len(%d) => ", j);
+				//for(k=0;k<36;k++)
+				//	printf(":%x", md_buf[k]);
+				//printf("\n");
+
+				sgxbridge_rsa_sign_md(md_buf, j, &(p[2]), &u);
+				printf("\n Signature : len(%d) => ", u);
+				for(k=0;k<u;k++)
+					printf(":%x", p[k+2]);
+				printf("\n");
+#else
 				if (RSA_sign(NID_md5_sha1, md_buf, j,
 				    &(p[2]), &u, pkey->pkey.rsa) <= 0) {
-					SSLerr(
-					    SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,
+					SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,
 					    ERR_LIB_RSA);
 					goto err;
 				}
+#endif
 				s2n(u, p);
 				n += u + 2;
 			} else if (md) {
 				/* Send signature algorithm. */
+
+#if 0 // OPENSSL_WITH_SGX (This part is invoked , when SSL client is Firefox)
+
+				tls12_get_mdid(p, md);
+				printf("\n DH PAram - : ");
+				for(k=0;k<n;k++)
+					printf(":%x", d[k]);
+				sgxbridge_rsa_sign_sig_algo_ex(d, n, &p[1], &i);
+				printf("\n Signature - %x : %x : ", p[0], p[1]);
+				p += 2;
+#else
 				if (SSL_USE_SIGALGS(s)) {
 					if (!tls12_get_sigandhash(p, pkey, md)) {
 						/* Should never happen */
@@ -1491,8 +1523,10 @@ ssl3_send_server_key_exchange(SSL *s)
 						    ERR_R_INTERNAL_ERROR);
 						goto f_err;
 					}
+
 					p += 2;
 				}
+
 				EVP_SignInit_ex(&md_ctx, md, NULL);
 				EVP_SignUpdate(&md_ctx,
 				    s->s3->client_random,
@@ -1508,10 +1542,12 @@ ssl3_send_server_key_exchange(SSL *s)
 					    ERR_LIB_EVP);
 					goto err;
 				}
+#endif
 				s2n(i, p);
 				n += i + 2;
 				if (SSL_USE_SIGALGS(s))
 					n += 2;
+
 			} else {
 				/* Is this error check actually needed? */
 				al = SSL_AD_HANDSHAKE_FAILURE;
@@ -1527,6 +1563,7 @@ ssl3_send_server_key_exchange(SSL *s)
 	s->state = SSL3_ST_SW_KEY_EXCH_B;
 	EVP_MD_CTX_cleanup(&md_ctx);
 
+	EXIT()
 	return (ssl3_handshake_write(s));
 	
 f_err:
@@ -1541,6 +1578,7 @@ err:
 int
 ssl3_send_certificate_request(SSL *s)
 {
+	ENTER()
 	unsigned char *p, *d;
 	int i, j, nl, off, n;
 	STACK_OF(X509_NAME) *sk = NULL;
@@ -1603,6 +1641,7 @@ ssl3_send_certificate_request(SSL *s)
 		s->state = SSL3_ST_SW_CERT_REQ_B;
 	}
 
+	EXIT()
 	/* SSL3_ST_SW_CERT_REQ_B */
 	return (ssl3_handshake_write(s));
 err:
@@ -1628,9 +1667,9 @@ ssl3_get_client_key_exchange(SSL *s)
 	EVP_PKEY *clnt_pub_pkey = NULL;
 	EC_POINT *clnt_ecpoint = NULL;
 	BN_CTX *bn_ctx = NULL;
-
+#ifdef OPENSSL_WITH_SGX 
 	bio_out = BIO_new_fp(stdout, BIO_NOCLOSE);
-
+#endif
 	/* 2048 maxlen is a guess.  How long a key does that permit? */
 	n = s->method->ssl_get_message(s, SSL3_ST_SR_KEY_EXCH_A,
 	    SSL3_ST_SR_KEY_EXCH_B, SSL3_MT_CLIENT_KEY_EXCHANGE, 2048, &ok);
@@ -1658,8 +1697,6 @@ ssl3_get_client_key_exchange(SSL *s)
 		}
 		rsa = pkey->pkey.rsa;
 
-		// RSA_print(bio_out, rsa, 0);
-
 		if (2 > n)
 			goto truncated;
 		n2s(p, i);
@@ -1670,26 +1707,20 @@ ssl3_get_client_key_exchange(SSL *s)
 		} else
 			n = i;
 
+#ifdef OPENSSL_WITH_SGX
 		// encrypted premaster secret
-		printf("encrypted premaster secret:\n");
+		printf("Encrypted premaster secret size(%d) : ", n);
 		print_hex(p, n);
 
-	 //    char *premaster = "3131423939413437334444454444453332453543313131443232394145383041434137424143394333354439353543314441394345354433363033454631303538334532343834314433453234304539414143433542423341433133384434353841414542444336384545333530343733344144374645463535343733453245";
-		// sgxbridge_pipe_write("premaster", strlen(premaster), premaster);
-
-		#ifdef OPENSSL_WITH_SGX
 		sgxbridge_pipe_write(CMD_PREMASTER, (int)n, (char*)p);
-		#endif
-
-		printf("n: %d\n", (int)n);
+#endif
 
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
-		printf("i: %d\n", i);
 
-		// decrypted premaster secret
-		printf("decrypted premaster secret:\n");
+		printf("RSA_private_decrypt return : %d\n", i);
+
+		printf("Decrypted premaster secret: ");
 		print_hex(p, i);
-
 
 		ERR_clear_error();
 

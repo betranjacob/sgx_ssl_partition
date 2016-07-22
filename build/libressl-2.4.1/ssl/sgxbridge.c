@@ -37,7 +37,7 @@ opensgx_pipe_init(int flag_dir)
     if(ret == -1)
     {
         if(errno != EEXIST) {
-            puts("Fail to mkdir");
+            fprintf(stderr, "Fail to mkdir");
             return -1;
         }
     }
@@ -64,8 +64,8 @@ opensgx_pipe_open(char *unique_id, int is_write, int flag_dir)
     if(ret == -1)
     {
         if(errno != EEXIST) {
-            puts("Fail to mknod");
-            return -1;
+        	fprintf(stderr, "Fail to mknod");
+        	return -1;
         }
     }
 
@@ -79,7 +79,7 @@ opensgx_pipe_open(char *unique_id, int is_write, int flag_dir)
 
     if(fd == -1)
     {
-        puts("Fail to open");
+    	fprintf(stderr, "Fail to open()");
         return -1;
     }
 
@@ -104,27 +104,24 @@ sgxbridge_pipe_write(char* cmd, int len, char* data)
     write(fd_ngx_sgx, cmd, cmd_len+1);
 
     write(fd_ngx_sgx, &len, sizeof(int));
-    write(fd_ngx_sgx, data, len+1);
+    write(fd_ngx_sgx, data, len);
 }
 
 int
 sgxbridge_init()
 {
     if(opensgx_pipe_init(0) < 0) {
-        // ngx_ssl_error(NGX_LOG_ALERT, log, 0, "pipe_init() failed");
-        // return NGX_ERROR;
+        fprintf(stderr, "%s - %s Pipe Init() failed \n", __FILE__, __func__);
         return -1;
     }
 
     if((fd_sgx_ngx = opensgx_pipe_open("sgx_read", RB_MODE_RD, 0)) < 0) {
-        // ngx_ssl_error(NGX_LOG_ALERT, log, 0, "pipe_open() failed");
-        // return NGX_ERROR;
+    	fprintf(stderr, "%s - %s Read Pipe Open() failed \n", __FILE__, __func__);
         return -1;
     }
 
     if((fd_ngx_sgx = opensgx_pipe_open("sgx_write", RB_MODE_WR, 0)) < 0) {
-        // ngx_ssl_error(NGX_LOG_ALERT, log, 0, "pipe_open() failed");
-        // return NGX_ERROR;
+    	fprintf(stderr, "%s - %s Write Pipe Open() failed \n", __FILE__, __func__);
         return -1;
     }
     
@@ -159,4 +156,23 @@ sgxbridge_get_master_secret(unsigned char *buf) {
     read(fd_sgx_ngx, buf, SSL3_MASTER_SECRET_SIZE);
 
     return SSL3_MASTER_SECRET_SIZE;
+}
+
+
+void
+sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size, unsigned char* op_sig, int *sig_size)
+{
+    sgxbridge_pipe_write(CMD_RSA_SIGN, md_size, ip_md);
+
+    read(fd_sgx_ngx, sig_size, sizeof(int));
+    read(fd_sgx_ngx, op_sig, *sig_size);
+}
+
+void
+sgxbridge_rsa_sign_sig_algo_ex(unsigned char* ip_md, int md_size, unsigned char* op_sig, int *sig_size)
+{
+	    sgxbridge_pipe_write(CMD_RSA_SIGN_SIG_ALG, md_size, ip_md);
+
+	    read(fd_sgx_ngx, sig_size, sizeof(int));
+	    read(fd_sgx_ngx, op_sig, *sig_size);
 }

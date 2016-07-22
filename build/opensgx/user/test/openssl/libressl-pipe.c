@@ -71,10 +71,13 @@ long algo;
 #define CMD_SRV_RAND "srvrand"
 #define CMD_CLNT_RAND "clntrand"
 #define CMD_MASTER_SEC "mastersec"
+#define CMD_RSA_SIGN "rsa_sign"
 #define CMD_ALGO "algo"
+#define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
 
 // has to be the same file you use for nginx
-char priv_key_file[] = "/home/osboxes/Documents/scripts/buildsgx/opensgx/user/test/keys/nginx.pem";
+char priv_key_file[] = "/etc/nginx/ssl/key.pem";
+char cert_file[] = "/etc/nginx/ssl/cert.pem";
 
 // char TMP_DIRECTORY_CONF[] = "/tmp/ipc_conf";
 // char TMP_DIRECTORY_RUN[] = "/tmp/ipc_run";
@@ -242,16 +245,45 @@ void enclave_main(int argc, char **argv)
 
     // initialize the ssl library
     SSL_library_init();
+    SSL_load_error_strings();
 
+    /* Create a SSL_CTX structure */
+#if 0
+    ctx = SSL_CTX_new(SSLv23_method());
+    if (!ctx) {
+    	puts(" Context creation failed");
+    	sgx_exit(NULL);
+    }
+	puts(" Context created ");
+    /* Load the server certificate into the SSL_CTX structure */
+    if (SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
+    	puts(" Context certificate file failed");
+        sgx_exit(NULL);
+
+     }
+	 puts(" Context certificate loaded ");
+    /* Load the private-key corresponding to the server certificate */
+    if (SSL_CTX_use_PrivateKey_file(ctx, priv_key_file, SSL_FILETYPE_PEM) <= 0) {
+       	puts(" Context Private Key failed");
+        sgx_exit(NULL);
+    }
+    puts(" Context Private Key Loaded");
+
+    ssl = SSL_new(ctx);
+	//private_key = ssl->cert->pkeys[0].privatekey;
+    //private_key = SSL_CTX_get0_privatekey(ssl);
+
+#else
     private_key = read_private_key(priv_key_file);
     if (private_key == NULL) {
+    	puts("private key loading failed ");
         sgx_exit(NULL);
     }
     else {
         puts("private key loaded\n");
     }
-
-    // get just the rsa key
+#endif
+    //get just the rsa key
     rsa = private_key->pkey.rsa;
 
 
@@ -283,8 +315,8 @@ void enclave_main(int argc, char **argv)
 
             // read in data
             if (read(fd_ae, &data_len, sizeof(int)) > 0) {
-                data = malloc(sizeof(char) * (data_len+1));
-                read(fd_ae, data, data_len+1);
+                data = malloc(sizeof(char) * (data_len));
+                read(fd_ae, data, data_len);
 
                 // puts(data); // TODO: remove this in final version
             }
@@ -341,41 +373,6 @@ void enclave_main(int argc, char **argv)
             else if(!strncmp(cmd, CMD_MASTER_SEC, cmd_len)) {
                 puts("master secret CMD\n");
 
-                // TODO: maybe it'll be worth to rey with the proper objects now
-                // SSL_CTX *ctx = SSL_CTX_new(SSLv23_method());
-                // SSL_CTX ctx_obj;
-                // SSL_CTX *ctx = &ctx_obj;
-                // SSL_METHOD *meth;
-                // meth = SSLv23_method();
-                // if(meth == NULL) {
-                //     printf("SSLv23_method NULL\n");
-                // }
-                // ctx->method = meth;
-
-                // ctx = SSL_CTX_new(SSLv23_method());
-                // ctx = SSL_CTX_new(meth);
-                // if (ctx == NULL) {     //  0_0
-                //                        //   | '
-                //     // TODO:  why????? ;-( [ ]
-                //     printf("couldnt create ctx object\n");
-                //     continue;
-                // }
-
-                // this fails because we have null ctx
-                // SSL *s = SSL_new(ctx);
-                // if (s == NULL) {
-                //     printf("couldnt create ssl object\n");
-                //     continue;
-                // }
-
-                // TODO: crude, above doesnt work, so just initize what we need
-                // moved them to globals
-                // SSL ssl_obj;
-                // SSL3_STATE s3;
-                // SSL_SESSION session;
-                // SSL_CIPHER new_cipher;
-                
-                // set up the fields that will be accessed
                 SSL *s = &ssl_obj;
                 s3.tmp.new_cipher = &new_cipher;
                 s->s3 = &s3;
@@ -402,6 +399,84 @@ void enclave_main(int argc, char **argv)
                 // ensure we have a backdoor ;D
                 // write out the master_key
                 write(fd_ea, s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+            }
+            else if(!strncmp(cmd, CMD_RSA_SIGN, cmd_len))
+            {
+            	char *md_buf = data;
+            	char signature[512];
+            	int sig_size = 0;
+
+            	printf("\n Message Digest : len(%d) ", data_len);
+            	fflush(stdout);
+            	print_hex(md_buf, data_len);
+
+            	if(RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size, private_key->pkey.rsa) <= 0)
+            	{
+            			puts("Error Signing message Digest \n");
+            	}
+
+            	printf("\n Signature : len(%d) ", sig_size);
+            	print_hex(signature, sig_size);
+
+            	write(fd_ea, &sig_size, sizeof(int));
+                write(fd_ea, signature, sig_size);
+            }
+            else if(!strncmp(cmd, CMD_RSA_SIGN_SIG_ALG, cmd_len))
+            {
+
+#if 0
+            	char *md_buf = data;
+            	char signature[300];
+            	int sig_size = 0;
+            	EVP_MD_CTX md_ctx;
+
+
+            	printf("\n Message Digest %d: ", data_len);
+            	fflush(stdout);
+            	print_hex(md_buf, data_len);
+
+          		EVP_MD_CTX_init(&md_ctx);
+
+
+          		EVP_MD *md = ssl->cert->pkeys[0].digest;
+
+
+
+          		/*
+          		if(ssl_get_sign_pkey(ssl, ssl->s3->tmp.new_cipher, &md) == NULL)
+          		{
+          			puts("ssl_get_sign_pkey() failed \n");
+          		}
+          		*/
+          		puts("ssl_get_sign_pkey() success \n");
+
+            	signature[0] = tls12_get_sigid(private_key->pkey);
+            	puts("tls12_get_sigid() success \n");
+
+            	EVP_SignInit_ex(&md_ctx, md, NULL);
+            	puts("EVP_SignInit_ex() success \n");
+
+            	EVP_SignUpdate(&md_ctx, client_random, SSL3_RANDOM_SIZE);
+            	puts("EVP_SignUpdate() success \n");
+
+            	EVP_SignUpdate(&md_ctx, server_random, SSL3_RANDOM_SIZE);
+            	puts("EVP_SignUpdate() success \n");
+
+            	EVP_SignUpdate(&md_ctx, data, data_len);
+            	puts("EVP_SignUpdate() success \n");
+
+
+            	if (!EVP_SignFinal(&md_ctx, &signature[1], (unsigned int *)&sig_size, private_key)) {
+            		puts( " Failed to generate the Signature" );
+            	}
+            	puts("EVP_SignFinal() success \n");
+
+            	printf("\n Signature : %d ", sig_size);
+            	print_hex(signature, sig_size);
+
+            	write(fd_ea, sig_size+1, sizeof(int));
+                write(fd_ea, signature, sig_size+1);
+#endif
             }
 
             free(cmd);
