@@ -142,7 +142,7 @@ build_libressl_sgx() {
 
 	cd $LIBRESSL_SGX_PATH
 
-	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
+	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
 
 	cd $BPATH
 	cd ..

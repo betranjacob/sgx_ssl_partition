@@ -60,6 +60,7 @@
 
 #include <openssl/lhash.h>
 #include <openssl/objects.h>
+#include <openssl/sgxbridge.h>
 
 #include "ssl_locl.h"
 
@@ -126,6 +127,12 @@ SSL_library_init(void)
 #endif
 	/* initialize cipher/digest methods table */
 	ssl_load_ciphers();
+
+    if (sgxbridge_init() == -1) {
+        // ngx_ssl_error(NGX_LOG_ALERT, log, 0, "opensgx_init() failed");
+        return 0;
+    }
+
 	return (1);
 }
 

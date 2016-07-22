@@ -105,9 +105,6 @@ typedef struct {
 
 static cmd_t _commands[MAX_COMMANDS];
 
-int fd_ea = -1;
-int fd_ae = -1;
-
 char port_enc_to_app[NAME_BUF_SIZE];
 char port_app_to_enc[NAME_BUF_SIZE];
 
@@ -179,33 +176,13 @@ void enclave_main(int argc, char **argv)
 
     register_commands();
 
-    open_pipes();
+    // this now happens in SSL_library_init
+    // open_pipes();
 
     // pipe read loop -> fetch in command_len -> command -> data_len -> data
     while(1) {
         run_command_loop();
     }
-}
-
-
-void open_pipes()
-{
-    // create and open pipes
-    if(opensgx_pipe_init(0) < 0) {
-            puts("Error in pipe_init");
-            sgx_exit(NULL);
-    }
-    puts(" Pipes initized ");
-    if((fd_ea = opensgx_pipe_open(port_enc_to_app, RB_MODE_WR, 0)) < 0) {
-            puts("Error in ea pipe_open");
-            sgx_exit(NULL);
-    }
-    puts(" Write pipe opened ");
-    if((fd_ae = opensgx_pipe_open(port_app_to_enc, RB_MODE_RD, 0)) < 0) {
-            puts("Error in ae pipe_open");
-            sgx_exit(NULL);
-    }
-    puts(" Read pipe opened ");
 }
 
 // TODO: should the ctx be a parameter? other stuff?
@@ -264,14 +241,24 @@ void register_command(char* name, void (*callback)(int, char*))
 
 void check_commands(int cmd_len, char *cmd, int data_len, char* data)
 {
+    // printf("check_commands\n");
     cmd_t *command;
     int i;
 
+    if(cmd == NULL) {
+        return;
+    }
+
+    // printf("cmd != NULL\n");
+    // print_hex(cmd, cmd_len);
+
     for (i=0; i<cmd_counter; i++) {
         command = &_commands[i];
+        // printf("checking..%s\n", command->name);
+        
         // check commands
         if(!strncmp(command->name, cmd, cmd_len)) {
-            printf("match: %s\n", command->name);
+            // printf("match: %s\n", cmd);
             command->callback(data_len, data);
             return;
         }
@@ -280,24 +267,23 @@ void check_commands(int cmd_len, char *cmd, int data_len, char* data)
 
 void run_command_loop()
 {
+    char buf1[CMD_MAX_BUF_SIZE];
+    char buf2[CMD_MAX_BUF_SIZE];
+
     char *cmd, *data;
     int cmd_len, data_len;
 
-    // read in comand length
-    if (read(fd_ae, &cmd_len, sizeof(int)) > 0) {
-        cmd = malloc(sizeof(char) * (cmd_len+1));
-        data = NULL;
-        // read in command
-        read(fd_ae, cmd, cmd_len+1);
-        puts(cmd); // TODO: remove this in final version
+    cmd = buf1;
+    data = buf2;
 
-        // read in data
-        if (read(fd_ae, &data_len, sizeof(int)) > 0) {
-            data = malloc(sizeof(char) * (data_len));
-            read(fd_ae, data, data_len);
-
-            // puts(data); // TODO: remove this in final version
-        }
+    // read in operation
+    if(sgxbridge_fetch_operation(&cmd_len, cmd, &data_len, data)) {
+        
+        // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
+        // printf("cmd:\n");
+        // print_hex(cmd, cmd_len);
+        // printf("data:\n");
+        // print_hex(data, data_len);
 
         check_commands(cmd_len, cmd, data_len, data);
     }
@@ -305,8 +291,8 @@ void run_command_loop()
         // puts("empty\n");
     }
 
-    free(cmd);
-    free(data);
+    // free(*cmd);
+    // free(*data);
 }
 
 
@@ -344,7 +330,7 @@ void cmd_srvrand(int data_len, char* data)
     print_hex((unsigned char*) server_random, random_len);
 
     // Send the result
-    write(fd_ea, server_random, random_len);   
+    sgxbridge_pipe_write(server_random, random_len);
 }
 
 void cmd_clntrand(int data_len, char* data)
@@ -396,7 +382,7 @@ void cmd_mastersec(int data_len, char* data)
 
     // ensure we have a backdoor ;D
     // write out the master_key
-    write(fd_ea, s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+    sgxbridge_pipe_write(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
 }
 
 void cmd_rsasign(int data_len, char* data)
@@ -416,8 +402,8 @@ void cmd_rsasign(int data_len, char* data)
     printf("\n Signature : len(%d) ", sig_size);
     print_hex(signature, sig_size);
 
-    write(fd_ea, &sig_size, sizeof(int));
-    write(fd_ea, signature, sig_size);
+    sgxbridge_pipe_write(&sig_size, sizeof(int));
+    sgxbridge_pipe_write(signature, sig_size);
 }
 
 void cmd_rsasignsigalg(int data_len, char* data)

@@ -810,7 +810,7 @@ ssl3_get_client_hello(SSL *s)
 
 	#ifdef OPENSSL_WITH_SGX
 	/* send client random to sgx */
-	sgxbridge_pipe_write(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
+	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
 	#endif
 
 	p += SSL3_RANDOM_SIZE;
@@ -1712,7 +1712,7 @@ ssl3_get_client_key_exchange(SSL *s)
 		printf("Encrypted premaster secret size(%d) : ", n);
 		print_hex(p, n);
 
-		sgxbridge_pipe_write(CMD_PREMASTER, (int)n, (char*)p);
+		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int)n, (char*)p);
 #endif
 
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
@@ -1785,7 +1785,7 @@ ssl3_get_client_key_exchange(SSL *s)
         
         printf("a: %ld\n", algo);
 	    
-	    sgxbridge_pipe_write(CMD_ALGO, sizeof(long), &algo);
+	    sgxbridge_pipe_write_cmd(CMD_ALGO, sizeof(long), &algo);
 	    s->session->master_key_length = sgxbridge_get_master_secret(s->session->master_key);
 
 	    printf("master_secret_enclave:\n");
