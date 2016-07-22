@@ -31,3 +31,13 @@ sudo nginx
 
 go to your browser and connect to 
 https://localhost
+
+
+# Testing DHE using openssl client 
+
+Run ssl client on a terminal 
+
+```bash
+openssl s_client -tls1 -cipher ECDHE -connect 127.0.0.1:443
+```
+
