@@ -11,18 +11,12 @@ NGINX_LOG_DIR=/var/log/nginx
 
 # names of latest versions of each package
 export NGINX_VERSION=1.11.1
-export VERSION_PCRE=pcre-8.38
 export VERSION_LIBRESSL=libressl-2.4.1
 export VERSION_NGINX=nginx-$NGINX_VERSION
-#export NPS_VERSION=1.9.32.10
-#export VERSION_PAGESPEED=v${NPS_VERSION}-beta
  
 # URLs to the source directories
 export SOURCE_LIBRESSL=http://ftp.openbsd.org/pub/OpenBSD/LibreSSL/
-export SOURCE_PCRE=ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/
 export SOURCE_NGINX=http://nginx.org/download/
-#export SOURCE_RTMP=https://github.com/arut/nginx-rtmp-module.git
-#export SOURCE_PAGESPEED=https://github.com/pagespeed/ngx_pagespeed/archive/
 export SOURCE_OPENSGX=https://github.com/sslab-gatech/opensgx.git
 
 # set where LibreSSL and nginx will be built
@@ -80,7 +74,6 @@ build_nginx() {
 	--conf-path=/etc/nginx/nginx.conf \
 	--error-log-path=$NGINX_LOG_DIR/error.log \
 	--http-log-path=$NGINX_LOG_DIR/access.log \
-	--with-pcre=$BPATH/$VERSION_PCRE \
 	--with-http_ssl_module \
 	--with-http_v2_module \
 	--with-file-aio \
@@ -105,18 +98,15 @@ build_nginx() {
 	--with-http_addition_module \
 	--with-http_geoip_module \
 	--with-http_gzip_static_module
-	# --add-module=$BPATH/rtmp
-	#--add-module=$BPATH/ngx_pagespeed-${NPS_VERSION}-beta
-	# --with-cc-opt='-Wno-error -O0 -g' \
 
 	touch $STATICLIBSSL/.openssl/include/openssl/ssl.h
 	# make -j $NB_PROC && sudo checkinstall --pkgname="nginx-libressl" --pkgversion="$NGINX_VERSION" \
-	# --provides="nginx" --requires="libc6, libpcre3, zlib1g" --strip=yes \
+	# --provides="nginx" --requires="libc6, zlib1g" --strip=yes \
 	# --stripso=yes --backup=yes -y --install=yes
 
 	# dont strip for callgrind
 	make -j $NB_PROC && sudo checkinstall --pkgname="nginx-libressl" --pkgversion="$NGINX_VERSION" \
-	--provides="nginx" --requires="libc6, libpcre3, zlib1g" --strip=no \
+	--provides="nginx" --requires="libc6, zlib1g" --strip=no \
 	--stripso=no --backup=yes -y --install=yes
 }
 
@@ -165,18 +155,12 @@ download_sources() {
 	wget -P ./build $SOURCE_LIBRESSL$VERSION_LIBRESSL.tar.gz
 	wget -P ./build $SOURCE_NGINX$VERSION_NGINX.tar.gz
 	git clone $SOURCE_OPENSGX ./build/opensgx
-	#wget -P ./build $SOURCE_PAGESPEED$VERSION_PAGESPEED.tar.gz
-	#wget -P ./build https://dl.google.com/dl/page-speed/psol/${NPS_VERSION}.tar.gz
-	#git clone $SOURCE_RTMP ./build/rtmp
 	 
 	# expand the source files
 	echo "Extract Packages"
 	cd build
 	tar xzf $VERSION_NGINX.tar.gz
 	tar xzf $VERSION_LIBRESSL.tar.gz
-	tar xzf $VERSION_PCRE.tar.gz
-	#tar xzf $VERSION_PAGESPEED.tar.gz
-	#tar xzf ${NPS_VERSION}.tar.gz -C ngx_pagespeed-${NPS_VERSION}-beta
 	cd ../
 }
 
