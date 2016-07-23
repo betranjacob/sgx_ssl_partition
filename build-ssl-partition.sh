@@ -30,20 +30,29 @@ export BPATH=$(pwd)/build
 export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
 
 # TODO: 
-# print_usage() {
-#   cat <<EOF
-# [usage] $0 [option]... [binary]
-# -a|--all  : test all cases
-# -h|--help : print help
-# -i|--icount : count the number of executed instructions
-# --perf|--performance-measure : measure SGX emulator performance metrics
-# [test]    : run a test case
-# EOF
-#   # for f in test/*.c; do
-#   #   printf " %-30s: %s\n" "$f" "$(cat $f| head -1 | sed 's#//##g')"
-#   # done
-# }
+print_usage() {
+  cat <<EOF
+[usage] $0 [option]
+-h|--help      : print help 
+-d|--download  : downloads the sources
+-n|--nginx     : build nginx-libressl and libressl for opensgx
+--ns           : build libressl for opensgx
+-g|--git       : build after cloning from git
+-c|--clean     : remove the build folder
+EOF
+  # for f in test/*.c; do
+  #   printf " %-30s: %s\n" "$f" "$(cat $f| head -1 | sed 's#//##g')"
+  # done
+}
 
+# TODO: make it acurate
+print_finish() {
+    echo "All done.";
+	echo "This build has not edited your existing /etc/nginx directory.";
+	echo "If things aren't working now you may need to refer to the";
+	echo "configuration files the new nginx ships with as defaults,";
+	echo "which are available at /etc/nginx-default";
+}
 
 build_nginx() {
 	# build static LibreSSL
@@ -227,7 +236,7 @@ prepare_fresh() {
 # clean out any files from previous runs of this script
 case "$1" in
   -h|--help)
-    echo "TODO: usage"
+    print_usage
   ;;
   -d|--download)
 	download_sources
@@ -248,6 +257,8 @@ case "$1" in
     build_nginx
     prepare_fresh
     build_libressl_sgx
+
+    print_finish
   ;;
   -c|--clean)
 	sudo rm -rf build
@@ -265,6 +276,8 @@ case "$1" in
     build_nginx
     prepare_fresh
     build_libressl_sgx
+
+    print_finish
   ;;
 esac
 
@@ -280,11 +293,3 @@ esac
 # #apply patches
 # patch -p 1 -i neverbleed_nginx_patch/nginx_neverbleed.diff
 # cd ../
-
-
-
-echo "All done.";
-echo "This build has not edited your existing /etc/nginx directory.";
-echo "If things aren't working now you may need to refer to the";
-echo "configuration files the new nginx ships with as defaults,";
-echo "which are available at /etc/nginx-default";
