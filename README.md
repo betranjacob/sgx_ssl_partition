@@ -21,7 +21,7 @@ char priv_key_file[] = "/home/osboxes/Documents/scripts/buildsgx/opensgx/user/te
 
 run the opensgx side of the pipe
 ```bash
-./test.sh test/openssl/libressl-pipe sgx_read sgx_write
+./test.sh test/openssl/libressl-pipe
 ```
 
 in a different window/tab run nginx
