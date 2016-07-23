@@ -91,7 +91,6 @@ build_nginx() {
 	--http-proxy-temp-path=/var/lib/nginx/proxy \
 	--http-scgi-temp-path=/var/lib/nginx/scgi \
 	--http-uwsgi-temp-path=/var/lib/nginx/uwsgi \
-	--with-pcre-jit \
 	--with-http_stub_status_module \
 	--with-http_realip_module \
 	--with-http_auth_request_module \
@@ -151,7 +150,6 @@ download_sources() {
 	# grab the source files
 	echo "Download sources"
 	# TODO: make sure we include downloaded sources we used in the repo
-	wget -P ./build $SOURCE_PCRE$VERSION_PCRE.tar.gz
 	wget -P ./build $SOURCE_LIBRESSL$VERSION_LIBRESSL.tar.gz
 	wget -P ./build $SOURCE_NGINX$VERSION_NGINX.tar.gz
 	git clone $SOURCE_OPENSGX ./build/opensgx
