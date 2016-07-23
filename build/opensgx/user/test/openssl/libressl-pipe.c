@@ -7,7 +7,9 @@ SSL_CTX* ctx = NULL;
 SSL_CIPHER new_cipher;
 cmd_t _commands[MAX_COMMANDS];
 session_ctrl_t session_ctrl;
+SSL* s;
 
+// TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
 char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
 char cert_file[] = "/etc/nginx/ssl/nginx.cert";
@@ -91,13 +93,14 @@ load_pKey_and_cert_to_ssl_ctx()
 void
 register_commands()
 {
-  register_command(CMD_PREMASTER, cmd_premaster);
-  register_command(CMD_SRV_RAND, cmd_srvrand);
-  register_command(CMD_CLNT_RAND, cmd_clntrand);
+  register_command(CMD_SESS_ID, cmd_sess_id);
+  register_command(CMD_CLNT_RAND, cmd_clnt_rand);
+  register_command(CMD_SRV_RAND, cmd_srv_rand);
   register_command(CMD_ALGO, cmd_algo);
-  register_command(CMD_MASTER_SEC, cmd_mastersec);
-  register_command(CMD_RSA_SIGN, cmd_rsasign);
-  register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsasignsigalg);
+  register_command(CMD_PREMASTER, cmd_premaster);
+  register_command(CMD_MASTER_SEC, cmd_master_sec);
+  register_command(CMD_RSA_SIGN, cmd_rsa_sign);
+  register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
 }
 
 // needs to be called before the command can be used
@@ -168,11 +171,72 @@ run_command_loop()
   } else {
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes
-    // puts("empty\n");
+    puts("empty\n");
   }
 }
 
 /* ========================= Command callbacks ============================= */
+
+void
+cmd_sess_id(int data_len, char* data)
+{
+  // TODO: store the old object somewhere here?
+
+  s = SSL_new(ctx);
+  ssl_get_new_session(s, 1);           // creates new session object
+  s->s3->tmp.new_cipher = &new_cipher; // TODO: find function equivalent
+  // set the session id
+
+  if(data_len > 0) {
+    memcpy(s->session->session_id, data, data_len);
+    s->session->session_id_length = data_len;
+  
+    // DOEBUG
+    puts("session_id:\n");
+    print_hex(s->session->session_id, data_len);
+  }
+  else {
+    // TODO: generate session id ourselves?
+  }
+}
+
+void
+cmd_clnt_rand(int data_len, char* data)
+{
+  // TODO: check on data_len?
+  memcpy(s->s3->client_random, data, SSL3_RANDOM_SIZE);
+
+  // DOEBUG
+  puts("client random:\n");
+  // print_hex(session_ctrl.client_random, data_len);
+  print_hex(s->s3->client_random, data_len);
+}
+
+void
+cmd_srv_rand(int data_len, char* data)
+{
+  int i, random_len = *((int *)data);
+
+  // TODO: check on data len
+  arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
+
+  // DEBUG
+  puts("server random:\n");
+  print_hex((unsigned char*)s->s3->server_random, random_len);
+
+  // Send the result
+  sgxbridge_pipe_write(s->s3->server_random, random_len);
+}
+
+void
+cmd_algo(int data_len, char* data)
+{
+  session_ctrl.algo = *((long*)data);
+
+  // DEBUG
+  puts("algo:\n");
+  print_hex(&session_ctrl.algo, data_len);
+}
 
 void
 cmd_premaster(int data_len, char* data)
@@ -188,64 +252,9 @@ cmd_premaster(int data_len, char* data)
 }
 
 void
-cmd_srvrand(int data_len, char* data)
+cmd_master_sec(int data_len, char* data)
 {
-  int i, random_len = *((int *)data);
-
-  if (session_ctrl.server_random != NULL)
-    free(session_ctrl.server_random);
-
-  session_ctrl.server_random = malloc(sizeof(char) * random_len);
-
-  // TODO: replace with proper pRNG
-  // arc4random_buf(buf, *p);
-  // pseudo random number generator
-  for (i = 0; i < random_len; i++) {
-    session_ctrl.server_random[i] = 4;
-  }
-
-  // DEBUG
-  puts("server random:\n");
-  print_hex((unsigned char*)session_ctrl.server_random, random_len);
-
-  // Send the result
-  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
-}
-
-void
-cmd_clntrand(int data_len, char* data)
-{
-  if (session_ctrl.client_random != NULL)
-    free(session_ctrl.client_random);
-
-  session_ctrl.client_random = malloc(sizeof(char) * data_len);
-  memcpy(session_ctrl.client_random, data, data_len);
-
-  // DOEBUG
-  puts("client random:\n");
-  print_hex(session_ctrl.client_random, data_len);
-}
-
-void
-cmd_algo(int data_len, char* data)
-{
-  session_ctrl.algo = *((long*)data);
-
-  // DEBUG
-  puts("algo:\n");
-  print_hex(&session_ctrl.algo, data_len);
-}
-
-void
-cmd_mastersec(int data_len, char* data)
-{
-  SSL* s = SSL_new(ctx);
-  ssl_get_new_session(s, 1);           // creates new session object
-  s->s3->tmp.new_cipher = &new_cipher; // TODO: find function equivalent
-
-  // copy in current connection's values
-  memcpy(s->s3->client_random, session_ctrl.client_random, SSL3_RANDOM_SIZE);
-  memcpy(s->s3->server_random, session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  // TODO: is this needed?
   new_cipher.algorithm2 = session_ctrl.algo;
 
   int key_len = tls1_generate_master_secret(s, s->session->master_key,
@@ -263,7 +272,7 @@ cmd_mastersec(int data_len, char* data)
 }
 
 void
-cmd_rsasign(int data_len, char* data)
+cmd_rsa_sign(int data_len, char* data)
 {
   char* md_buf = data;
   char signature[512];
@@ -284,7 +293,7 @@ cmd_rsasign(int data_len, char* data)
 }
 
 void
-cmd_rsasignsigalg(int data_len, char* data)
+cmd_rsa_sign_sig_alg(int data_len, char* data)
 {
   char* md_buf = data;
   char signature[512];
@@ -309,8 +318,8 @@ cmd_rsasignsigalg(int data_len, char* data)
 
   EVP_MD_CTX_init(&md_ctx);
   EVP_SignInit_ex(&md_ctx, md, NULL);
-  EVP_SignUpdate(&md_ctx, session_ctrl.client_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, s->s3->client_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, s->s3->server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
   if (!EVP_SignFinal(&md_ctx, &signature[4], (unsigned int*)&sig_size,

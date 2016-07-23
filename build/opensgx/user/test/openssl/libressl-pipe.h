@@ -26,15 +26,6 @@
 #define RB_MODE_RD 0
 #define RB_MODE_WR 1
 
-// TODO: can change to codes if we care about the size
-#define CMD_PREMASTER "premaster"
-#define CMD_SRV_RAND "srvrand"
-#define CMD_CLNT_RAND "clntrand"
-#define CMD_MASTER_SEC "mastersec"
-#define CMD_RSA_SIGN "rsa_sign"
-#define CMD_ALGO "algo"
-#define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
-
 typedef struct
 {
   void (*callback)(int, char*);
@@ -59,13 +50,14 @@ void check_commands(int cmd_len, char* cmd, int data_len, char* data);
 void run_command_loop();
 
 // TODO: write a macro for commands
-void cmd_premaster(int data_len, char* data);
-void cmd_srvrand(int data_len, char* data);
-void cmd_clntrand(int data_len, char* data);
+void cmd_sess_id(int data_len, char* data);
+void cmd_clnt_rand(int data_len, char* data);
+void cmd_srv_rand(int data_len, char* data);
 void cmd_algo(int data_len, char* data);
-void cmd_mastersec(int data_len, char* data);
-void cmd_rsasign(int data_len, char* data);
-void cmd_rsasignsigalg(int data_len, char* data);
+void cmd_premaster(int data_len, char* data);
+void cmd_master_sec(int data_len, char* data);
+void cmd_rsa_sign(int data_len, char* data);
+void cmd_rsa_sign_sig_alg(int data_len, char* data);
 
 extern int cmd_counter;
 extern EVP_PKEY* private_key;

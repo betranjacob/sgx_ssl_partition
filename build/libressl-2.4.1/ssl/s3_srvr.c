@@ -808,11 +808,6 @@ ssl3_get_client_hello(SSL *s)
 	/* load the client random */
 	memcpy(s->s3->client_random, p, SSL3_RANDOM_SIZE);
 
-	#ifdef OPENSSL_WITH_SGX
-	/* send client random to sgx */
-	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
-	#endif
-
 	p += SSL3_RANDOM_SIZE;
 
 	/* get the session-id */
@@ -852,6 +847,13 @@ ssl3_get_client_hello(SSL *s)
 				goto err;
 		}
 	}
+
+	#ifdef OPENSSL_WITH_SGX
+	/* send session id to sgx TODO: session len is 0 */
+	sgxbridge_pipe_write_cmd(CMD_SESS_ID, s->session->session_id_length, (char*)s->session->session_id);
+	/* send client random to sgx */
+	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
+	#endif
 
 	p += j;
 
