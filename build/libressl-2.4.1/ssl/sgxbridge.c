@@ -114,14 +114,15 @@ sgxbridge_pipe_write_cmd(char* cmd, int len, char* data)
 
     printf("sgxbridge_pipe_write, cmd: %s, len: %d\n", cmd, len);
     print_hex(data, len);
-    // printf("%s\n", data);
+
     int cmd_len = strlen(cmd);
 
     write(fd, &cmd_len, sizeof(int));
     write(fd, cmd, cmd_len+1);
 
     write(fd, &len, sizeof(int));
-    write(fd, data, len);
+    if(len > 0)
+        write(fd, data, len);
 }
 
 int
@@ -173,7 +174,6 @@ sgxbridge_fetch_operation(int *cmd_len, char *cmd, int *data_len, char *data)
 
         // read in command
         read(fd, cmd, *cmd_len+1);
-        // printf("cmd: %s\n", cmd);
 
         // read in data
         if (read(fd, data_len, sizeof(int)) > 0) {
@@ -181,11 +181,13 @@ sgxbridge_fetch_operation(int *cmd_len, char *cmd, int *data_len, char *data)
                 return 0;
             }
 
-            // *data = malloc(sizeof(char) * (*data_len));
-            read(fd, data, *data_len);
+            if(*data_len > 0) {
+                // *data = malloc(sizeof(char) * (*data_len));
+                read(fd, data, *data_len);
+            }
 
-            // printf("data:\n");
-            // print_hex(data, *data_len);
+            printf("fetch_operation, cmd: %s, len: %d\n", cmd, *data_len);
+            print_hex(data, *data_len);
 
             return 1;
         }

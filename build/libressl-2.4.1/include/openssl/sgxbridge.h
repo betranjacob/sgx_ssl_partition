@@ -3,12 +3,13 @@
 
 #define CMD_MAX_BUF_SIZE 1024
 	
-#define CMD_PREMASTER "premaster"
-#define CMD_SRV_RAND "srvrand"
-#define CMD_CLNT_RAND "clntrand"
-#define CMD_MASTER_SEC "mastersec"
-#define CMD_ALGO "algo"
-#define CMD_RSA_SIGN "rsa_sign"
+#define CMD_SESS_ID    "sess_id"
+#define CMD_CLNT_RAND  "clnt_rand"
+#define CMD_SRV_RAND   "srv_rand"
+#define CMD_PREMASTER  "premaster"
+#define CMD_MASTER_SEC "master_sec"
+#define CMD_ALGO       "algo"
+#define CMD_RSA_SIGN   "rsa_sign"
 #define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
 
 #define NAME_BUF_SIZE 256
