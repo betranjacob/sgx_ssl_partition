@@ -3060,4 +3060,20 @@ SSL_cache_hit(SSL *s)
 	return (s->hit);
 }
 
+EVP_PKEY* SSL_CTX_get_privatekey(SSL_CTX *ctx)
+{
+        if (ctx->cert->key->privatekey != NULL)
+                return (ctx->cert->key->privatekey);
+        else
+                return NULL;
+}
+
+EVP_MD* SSL_CTX_get_md(SSL_CTX *ctx)
+{
+        if (ctx->cert->key->digest != NULL)
+                return (ctx->cert->key->digest);
+        else
+                return NULL;
+}
+
 IMPLEMENT_OBJ_BSEARCH_GLOBAL_CMP_FN(SSL_CIPHER, SSL_CIPHER, ssl_cipher_id);

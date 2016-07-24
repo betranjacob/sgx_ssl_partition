@@ -15,13 +15,7 @@
 #include <openssl/pem.h>
 
 // #include "ssl_locl.h"
-
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
-#include <openssl/md5.h>
-
 #include <openssl/sgxbridge.h>
-
 
 #define PRIVATE_KEY_FILE_SIZE 1733
 
@@ -31,9 +25,8 @@
 static int cmd_counter = 0;
 
 // TODO: this resides in ssl_locl.h, figure out how to include it
-#define SSL_PKEY_NUM        8
 
-
+#if 1
 typedef struct ssl3_enc_method {
    int (*enc)(SSL *, int);
    int (*mac)(SSL *, unsigned char *, int);
@@ -56,52 +49,12 @@ typedef struct ssl3_enc_method {
    unsigned int enc_flags;
 } SSL3_ENC_METHOD;
 
-typedef struct cert_pkey_st
-{
-    X509 *x509;
-    EVP_PKEY *privatekey;
-    /* Digest to use when signing */
-    const EVP_MD *digest;
-} CERT_PKEY;
-
-typedef struct cert_st
-{
-   /* Current active set */
-   CERT_PKEY *key; /* ALWAYS points to an element of the pkeys array
-            * Probably it would make more sense to store
-            * an index, not a pointer. */
-
-   /* The following masks are for the key and auth
-    * algorithms that are supported by the certs below */
-   int valid;
-   unsigned long mask_k;
-   unsigned long mask_a;
-   unsigned long export_mask_k;
-   unsigned long export_mask_a;
-#ifndef OPENSSL_NO_RSA
-   RSA *rsa_tmp;
-   RSA *(*rsa_tmp_cb)(SSL *ssl,int is_export,int keysize);
 #endif
-#ifndef OPENSSL_NO_DH
-   DH *dh_tmp;
-   DH *(*dh_tmp_cb)(SSL *ssl,int is_export,int keysize);
-#endif
-#ifndef OPENSSL_NO_ECDH
-   EC_KEY *ecdh_tmp;
-   /* Callback for generating ephemeral ECDH keys */
-   EC_KEY *(*ecdh_tmp_cb)(SSL *ssl,int is_export,int keysize);
-#endif
-
-   CERT_PKEY pkeys[SSL_PKEY_NUM];
-
-   int references; /* >1 only if SSL_copy_session_id is used */
-} CERT;
 
 typedef struct {
    void (*callback)(int, char*);
    char* name;
 } cmd_t;
-
 
 static cmd_t _commands[MAX_COMMANDS];
 
@@ -109,9 +62,7 @@ EVP_PKEY* private_key = NULL;
 RSA *rsa = NULL;
 
 SSL_CTX *ctx;
-SSL *ssl;
 SSL_CIPHER new_cipher;
-
 
 // TODO: store these properly in a structure / session store
 char *client_random;
@@ -134,7 +85,7 @@ long algo;
 
 // prototypes
 void open_pipes();
-void create_context();
+void load_pKey_and_cert_to_ssl_ctx();
 void register_command(char* name, void (*callback)(int, char*));
 void register_commands();
 void check_commands(int cmd_len, char *cmd, int data_len, char* data);
@@ -150,9 +101,8 @@ void cmd_rsasign(int data_len, char* data);
 void cmd_rsasignsigalg(int data_len, char* data);
 
 // has to be the same file you use for nginx
-char priv_key_file[] = "/home/osboxes/Documents/tmp/ssl-partition/build/opensgx/user/test/keys/nginx.key";
-char cert_file[] = "/home/osboxes/Documents/tmp/ssl-partition/build/opensgx/user/test/keys/nginx.crt";
-
+char priv_key_file[] = "/etc/nginx/ssl/key.pem";
+char cert_file[] = "/etc/nginx/ssl/cert.pem";
 
 /* main operation. communicate with tor-gencert & tor process */
 void enclave_main(int argc, char **argv)
@@ -166,11 +116,15 @@ void enclave_main(int argc, char **argv)
     SSL_library_init();
     SSL_load_error_strings();
 
-    /* Create an SSL_CTX structure */
-    create_context();
+    printf("SSL Initialised \n");
+
+    /* Load Private Key and certificate to SSL_CTX structure */
+    load_pKey_and_cert_to_ssl_ctx();
 
     /* initialize the commnads */
     register_commands();
+
+    printf("Commands registered \n");
 
     // pipe read loop:
     //   -> fetch in command_len -> command -> data_len -> data
@@ -192,7 +146,7 @@ void print_session_params(SSL *s)
 }   
 
 // TODO: should the ctx be a parameter? other stuff?
-void create_context()
+void load_pKey_and_cert_to_ssl_ctx()
 {
     ctx = SSL_CTX_new(SSLv23_method());
     if (!ctx) {
@@ -200,6 +154,7 @@ void create_context()
         sgx_exit(NULL);
     }
     puts(" Context created ");
+
     /* Load the server certificate into the SSL_CTX structure */
     if (SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
         puts(" Context certificate file failed");
@@ -207,6 +162,7 @@ void create_context()
 
      }
      puts(" Context certificate loaded ");
+
     /* Load the private-key corresponding to the server certificate */
     if (SSL_CTX_use_PrivateKey_file(ctx, priv_key_file, SSL_FILETYPE_PEM) <= 0) {
         puts(" Context Private Key failed");
@@ -214,12 +170,11 @@ void create_context()
     }
     puts(" Context Private Key Loaded");
 
-    // private_key = SSL_CTX_get0_privatekey(ctx);
-    private_key = ctx->cert->key->privatekey;
+    private_key = SSL_CTX_get_privatekey(ctx);
+    if(private_key == NULL)
+  	  fprintf(stderr, "\n Retriving Private Key from ctx failed \n");
 
-    // get just the rsa key
     rsa = private_key->pkey.rsa;
-
 }
 
 // initialize the commnd array
@@ -303,9 +258,6 @@ void run_command_loop()
         // sgxbridge_fetch_operation does a blocking read on named pipes
         // puts("empty\n");
     }
-
-    // free(*cmd);
-    // free(*data);
 }
 
 
@@ -384,83 +336,72 @@ void cmd_mastersec(int data_len, char* data)
     // ensure we have a backdoor ;D
     // write out the master_key
     sgxbridge_pipe_write(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+
+    SSL_free(s);
 }
 
-void cmd_rsasign(int data_len, char* data)
-{
-    char *md_buf = data;
-    char signature[512];
-    int sig_size = 0;
+void cmd_rsasign(int data_len, char* data) {
+	char *md_buf = data;
+	char signature[512];
+	int sig_size = 0;
 
-    printf("\n Message Digest : len(%d) ", data_len);
-    print_hex(md_buf, data_len);
+	printf("\n Message Digest : len(%d) ", data_len);
 
-    if(RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size, private_key->pkey.rsa) <= 0)
-    {
-        puts("Error Signing message Digest \n");
-    }
+	if (RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size,
+			private_key->pkey.rsa) <= 0) {
+		puts("Error Signing message Digest \n");
+	}
 
-    printf("\n Signature : len(%d) ", sig_size);
-    print_hex(signature, sig_size);
+	printf("\n Signature : len(%d) ", sig_size);
+	//print_hex(signature, sig_size);
 
-    sgxbridge_pipe_write(&sig_size, sizeof(int));
-    sgxbridge_pipe_write(signature, sig_size);
+	sgxbridge_pipe_write(&sig_size, sizeof(int));
+	sgxbridge_pipe_write(signature, sig_size);
 }
 
-void cmd_rsasignsigalg(int data_len, char* data)
-{
+void cmd_rsasignsigalg(int data_len, char* data) {
+	char *md_buf = data;
+	char signature[512];
+	int sig_size = 0;
+	EVP_MD_CTX md_ctx;
+	EVP_MD *md = NULL;
+
+	md = SSL_CTX_get_md(ctx);
+	if (md == NULL)
+		fprintf(stderr, "\n Retriving Digest from ctx failed \n");
+
+	fprintf(stderr, "\n Message Digest : len(%d) \n ", data_len);
+
 #if 0
-    char *md_buf = data;
-    char signature[300];
-    int sig_size = 0;
-    EVP_MD_CTX md_ctx;
-
-
-    printf("\n Message Digest %d: ", data_len);
-    fflush(stdout);
-    print_hex(md_buf, data_len);
-
-    EVP_MD_CTX_init(&md_ctx);
-
-
-    EVP_MD *md = ssl->cert->pkeys[0].digest;
-
-
-
-    /*
-    if(ssl_get_sign_pkey(ssl, ssl->s3->tmp.new_cipher, &md) == NULL)
-    {
-        puts("ssl_get_sign_pkey() failed \n");
-    }
-    */
-    puts("ssl_get_sign_pkey() success \n");
-
-    signature[0] = tls12_get_sigid(private_key->pkey);
-    puts("tls12_get_sigid() success \n");
-
-    EVP_SignInit_ex(&md_ctx, md, NULL);
-    puts("EVP_SignInit_ex() success \n");
-
-    EVP_SignUpdate(&md_ctx, client_random, SSL3_RANDOM_SIZE);
-    puts("EVP_SignUpdate() success \n");
-
-    EVP_SignUpdate(&md_ctx, server_random, SSL3_RANDOM_SIZE);
-    puts("EVP_SignUpdate() success \n");
-
-    EVP_SignUpdate(&md_ctx, data, data_len);
-    puts("EVP_SignUpdate() success \n");
-
-
-    if (!EVP_SignFinal(&md_ctx, &signature[1], (unsigned int *)&sig_size, private_key)) {
-        puts( " Failed to generate the Signature" );
-    }
-    puts("EVP_SignFinal() success \n");
-
-    printf("\n Signature : %d ", sig_size);
-    print_hex(signature, sig_size);
-
-    write(fd_ea, sig_size+1, sizeof(int));
-    write(fd_ea, signature, sig_size+1);
+	fflush(stdout);
+	print_hex(md_buf, data_len);
 #endif
+
+	if (!tls12_get_sigandhash(signature, private_key, md)) {
+		puts("Error getting sigandhash ");
+	}
+
+	EVP_MD_CTX_init(&md_ctx);
+	EVP_SignInit_ex(&md_ctx, md, NULL);
+	EVP_SignUpdate(&md_ctx, client_random, SSL3_RANDOM_SIZE);
+	EVP_SignUpdate(&md_ctx, server_random, SSL3_RANDOM_SIZE);
+	EVP_SignUpdate(&md_ctx, md_buf, data_len);
+
+	if (!EVP_SignFinal(&md_ctx, &signature[4], (unsigned int *) &sig_size,
+			private_key)) {
+		puts(" Failed to generate the Signature");
+	}
+	fprintf(stderr, "\n Signature generated successfully : len(%d) \n ",
+			sig_size);
+
+#if 0
+	fflush(stdout);
+	print_hex(&signature[4], sig_size);
+	fflush(stdout);
+#endif
+	sig_size += 4; // Increment for the additional data we computed.
+
+	sgxbridge_pipe_write(&sig_size, sizeof(int));
+	sgxbridge_pipe_write(signature, sig_size);
 }
 

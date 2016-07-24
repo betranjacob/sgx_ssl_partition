@@ -129,7 +129,7 @@ SSL_library_init(void)
 	ssl_load_ciphers();
 
     if (sgxbridge_init() == -1) {
-        // ngx_ssl_error(NGX_LOG_ALERT, log, 0, "opensgx_init() failed");
+        fprintf(stderr, "sgxbridge_init() failed __%s__ -__ %s__ \n", __FILE__, __func__);
         return 0;
     }
 

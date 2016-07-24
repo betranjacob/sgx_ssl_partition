@@ -1482,15 +1482,8 @@ ssl3_send_server_key_exchange(SSL *s)
 				}
 #ifdef OPENSSL_WITH_SGX
 				printf("Message Digest : len(%d) => ", j);
-				//for(k=0;k<36;k++)
-				//	printf(":%x", md_buf[k]);
-				//printf("\n");
-
 				sgxbridge_rsa_sign_md(md_buf, j, &(p[2]), &u);
 				printf("\n Signature : len(%d) => ", u);
-				for(k=0;k<u;k++)
-					printf(":%x", p[k+2]);
-				printf("\n");
 #else
 				if (RSA_sign(NID_md5_sha1, md_buf, j,
 				    &(p[2]), &u, pkey->pkey.rsa) <= 0) {
@@ -1503,16 +1496,12 @@ ssl3_send_server_key_exchange(SSL *s)
 				n += u + 2;
 			} else if (md) {
 				/* Send signature algorithm. */
-
-#if 0 // OPENSSL_WITH_SGX (This part is invoked , when SSL client is Firefox)
-
-				tls12_get_mdid(p, md);
-				printf("\n DH PAram - : ");
-				for(k=0;k<n;k++)
-					printf(":%x", d[k]);
-				sgxbridge_rsa_sign_sig_algo_ex(d, n, &p[1], &i);
-				printf("\n Signature - %x : %x : ", p[0], p[1]);
+#ifdef  OPENSSL_WITH_SGX // (This part is invoked , when SSL client has extensions, eg. firefox)
+				printf("\n DH PAram - : len(%d) ", n);
+				sgxbridge_rsa_sign_sig_algo_ex(d, n, p, &i);
+				printf("\n Signature - [%x:%x] : len(%d) => ", p[0], p[1], i);
 				p += 2;
+				i -= 4;
 #else
 				if (SSL_USE_SIGALGS(s)) {
 					if (!tls12_get_sigandhash(p, pkey, md)) {
@@ -1523,7 +1512,6 @@ ssl3_send_server_key_exchange(SSL *s)
 						    ERR_R_INTERNAL_ERROR);
 						goto f_err;
 					}
-
 					p += 2;
 				}
 
