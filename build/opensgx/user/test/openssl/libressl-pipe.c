@@ -1,77 +1,12 @@
-#include "../test.h"
-#include <stdlib.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <unistd.h>
-#include <string.h>
+#include "libressl-pipe.h"
 
-#include <openssl/bio.h>
-#include <openssl/evp.h>
-
-#include <openssl/ssl.h>
-#include <openssl/bn.h>
-#include <openssl/rsa.h>
-#include <openssl/pem.h>
-
-#include "ssl_locl.h"
-#include <openssl/sgxbridge.h>
-
-#define PRIVATE_KEY_FILE_SIZE 1733
-
-#define NAME_BUF_SIZE 256
-
-#define MAX_COMMANDS 64
-static int cmd_counter = 0;
-
-typedef struct
-{
-  void (*callback)(int, char*);
-  char* name;
-} cmd_t;
-
-static cmd_t _commands[MAX_COMMANDS];
-
+int cmd_counter = 0;
 EVP_PKEY* private_key = NULL;
 RSA* rsa = NULL;
-
-SSL_CTX* ctx;
+SSL_CTX* ctx = NULL;
 SSL_CIPHER new_cipher;
-
-// TODO: store these properly in a structure / session store
-char* client_random;
-char* server_random;
-unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
-unsigned char premaster_secret[SSL_MAX_MASTER_KEY_LENGTH];
-long algo;
-
-#define RB_MODE_RD 0
-#define RB_MODE_WR 1
-
-// TODO: can change to codes if we care about the size
-#define CMD_PREMASTER "premaster"
-#define CMD_SRV_RAND "srvrand"
-#define CMD_CLNT_RAND "clntrand"
-#define CMD_MASTER_SEC "mastersec"
-#define CMD_RSA_SIGN "rsa_sign"
-#define CMD_ALGO "algo"
-#define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
-
-// prototypes
-void open_pipes();
-void load_pKey_and_cert_to_ssl_ctx();
-void register_command(char* name, void (*callback)(int, char*));
-void register_commands();
-void check_commands(int cmd_len, char* cmd, int data_len, char* data);
-void run_command_loop();
-
-// TODO: write a macro for commands
-void cmd_premaster(int data_len, char* data);
-void cmd_srvrand(int data_len, char* data);
-void cmd_clntrand(int data_len, char* data);
-void cmd_algo(int data_len, char* data);
-void cmd_mastersec(int data_len, char* data);
-void cmd_rsasign(int data_len, char* data);
-void cmd_rsasignsigalg(int data_len, char* data);
+cmd_t _commands[MAX_COMMANDS];
+session_ctrl_t session_ctrl;
 
 // has to be the same file you use for nginx
 char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
@@ -243,58 +178,62 @@ void
 cmd_premaster(int data_len, char* data)
 {
   // decrypt premaster secret (TODO: need to do anyt with i?)
-  int i = RSA_private_decrypt(data_len, (unsigned char*)data, premaster_secret,
-                              rsa, RSA_PKCS1_PADDING);
+  int i =
+    RSA_private_decrypt(data_len, (unsigned char*)data,
+                        session_ctrl.premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
   puts("decrypted premaster secret:\n");
-  print_hex(premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
+  print_hex(session_ctrl.premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
 }
 
 void
 cmd_srvrand(int data_len, char* data)
 {
-  int random_len = *((int*)data);
+  int i, random_len = *((int *)data);
 
-  free(server_random);
-  server_random = malloc(sizeof(char) * random_len);
+  if (session_ctrl.server_random != NULL)
+    free(session_ctrl.server_random);
+
+  session_ctrl.server_random = malloc(sizeof(char) * random_len);
 
   // TODO: replace with proper pRNG
   // arc4random_buf(buf, *p);
   // pseudo random number generator
-  int i;
   for (i = 0; i < random_len; i++) {
-    server_random[i] = 4;
+    session_ctrl.server_random[i] = 4;
   }
 
   // DEBUG
   puts("server random:\n");
-  print_hex((unsigned char*)server_random, random_len);
+  print_hex((unsigned char*)session_ctrl.server_random, random_len);
 
   // Send the result
-  sgxbridge_pipe_write(server_random, random_len);
+  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
 }
 
 void
 cmd_clntrand(int data_len, char* data)
 {
-  free(client_random);
-  client_random = malloc(sizeof(char) * data_len);
-  memcpy(client_random, data, data_len);
+  if (session_ctrl.client_random != NULL)
+    free(session_ctrl.client_random);
+
+  session_ctrl.client_random = malloc(sizeof(char) * data_len);
+  memcpy(session_ctrl.client_random, data, data_len);
 
   // DOEBUG
   puts("client random:\n");
-  print_hex(client_random, data_len);
+  print_hex(session_ctrl.client_random, data_len);
 }
 
 void
 cmd_algo(int data_len, char* data)
 {
-  algo = *((long*)data);
+  session_ctrl.algo = *((long*)data);
 
   // DEBUG
   puts("algo:\n");
-  print_hex(&algo, data_len);
+  print_hex(&session_ctrl.algo, data_len);
 }
 
 void
@@ -305,12 +244,13 @@ cmd_mastersec(int data_len, char* data)
   s->s3->tmp.new_cipher = &new_cipher; // TODO: find function equivalent
 
   // copy in current connection's values
-  memcpy(s->s3->client_random, client_random, SSL3_RANDOM_SIZE);
-  memcpy(s->s3->server_random, server_random, SSL3_RANDOM_SIZE);
-  new_cipher.algorithm2 = algo;
+  memcpy(s->s3->client_random, session_ctrl.client_random, SSL3_RANDOM_SIZE);
+  memcpy(s->s3->server_random, session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  new_cipher.algorithm2 = session_ctrl.algo;
 
-  int key_len = tls1_generate_master_secret(
-    s, s->session->master_key, premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
+  int key_len = tls1_generate_master_secret(s, s->session->master_key,
+                                            session_ctrl.premaster_secret,
+                                            SSL_MAX_MASTER_KEY_LENGTH);
 
   // DEBUG
   print_session_params(s);
@@ -369,8 +309,8 @@ cmd_rsasignsigalg(int data_len, char* data)
 
   EVP_MD_CTX_init(&md_ctx);
   EVP_SignInit_ex(&md_ctx, md, NULL);
-  EVP_SignUpdate(&md_ctx, client_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, server_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, session_ctrl.client_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, session_ctrl.server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
   if (!EVP_SignFinal(&md_ctx, &signature[4], (unsigned int*)&sig_size,
