@@ -11,7 +11,7 @@ SGX_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSGXDIR)/libsgx.a \
 
 # LIBRESSL LIB
 # LIBRESSLDIR = ../../build/libressl-2.4.1  # relative doesnt seem to work
-LIBRESSLDIR = /home/osboxes/Documents/tmp/ssl-partition/build/opensgx/libsgx/libressl
+LIBRESSLDIR = ../libsgx/libressl
 LIBSSLDIR = $(LIBRESSLDIR)
 
 # OpenSSL Cases
