@@ -143,6 +143,10 @@
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 
+#include <openssl/sgxbridge.h>
+
+#define OPENSSL_WITH_SGX
+
 void
 tls1_cleanup_key_block(SSL *s)
 {
@@ -354,7 +358,7 @@ err:
 }
 
 /* seed1 through seed5 are virtually concatenated */
-static int
+int
 tls1_PRF(long digest_mask, const void *seed1, int seed1_len, const void *seed2,
     int seed2_len, const void *seed3, int seed3_len, const void *seed4,
     int seed4_len, const void *seed5, int seed5_len, const unsigned char *sec,
@@ -770,8 +774,32 @@ tls1_setup_key_block(SSL *s)
 		goto err;
 	}
 
+#ifdef OPENSSL_WITH_SGX
+        // this pipe write is temporary, explicitly ask enclave to generate
+        // key block until this logic is completely isolated in the enclave
+        fprintf(stdout, "delegating key block generation to enclave \n");
+
+        sgxbridge_st sgxb;
+        sgxb.key_block_len = key_block_len;
+        sgxb.algo2 = ssl_get_algorithm2(s);
+
+        sgxbridge_pipe_write_cmd(CMD_KEY_BLOCK,
+                sizeof(sgxbridge_st),
+                (char *) &sgxb);
+        sgxbridge_pipe_read(key_block_len, (char *) key_block);
+
+        if(key_block_len == 1)
+            goto err;
+
+        int i;
+        fprintf(stdout, "keyblock (%d):\n", key_block_len);
+        for(i = 0; i < key_block_len; i++)
+            fprintf(stdout, "%x", key_block[i]);
+        fprintf(stdout, "\n");
+#else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
+#endif
 
 	if (!(s->options & SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS) &&
 	    s->method->version <= TLS1_VERSION) {
