@@ -11,8 +11,8 @@ SSL* s;
 
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
-char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
-char cert_file[] = "/etc/nginx/ssl/nginx.cert";
+char priv_key_file[] = "/usr/local/nginx/conf/cert.key";
+char cert_file[] = "/usr/local/nginx/conf/cert.pem";
 
 /* main operation. communicate with tor-gencert & tor process */
 void
@@ -101,6 +101,7 @@ register_commands()
   register_command(CMD_MASTER_SEC, cmd_master_sec);
   register_command(CMD_RSA_SIGN, cmd_rsa_sign);
   register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
+  register_command(CMD_KEY_BLOCK, cmd_key_block);
 }
 
 // needs to be called before the command can be used
@@ -210,6 +211,11 @@ cmd_clnt_rand(int data_len, char* data)
   puts("client random:\n");
   // print_hex(session_ctrl.client_random, data_len);
   print_hex(s->s3->client_random, data_len);
+
+  // this is bad, but I have to do it, TODO: clean this later
+  session_ctrl.client_random = malloc(SSL3_RANDOM_SIZE);
+  memset(session_ctrl.client_random, 0, SSL3_RANDOM_SIZE);
+  memcpy(session_ctrl.client_random, s->s3->client_random, SSL3_RANDOM_SIZE);
 }
 
 void
@@ -226,6 +232,11 @@ cmd_srv_rand(int data_len, char* data)
 
   // Send the result
   sgxbridge_pipe_write(s->s3->server_random, random_len);
+
+  // this is bad, but I have to do it, TODO: clean this later
+  session_ctrl.server_random = malloc(SSL3_RANDOM_SIZE);
+  memset(session_ctrl.server_random, 0, SSL3_RANDOM_SIZE);
+  memcpy(session_ctrl.server_random, s->s3->server_random, SSL3_RANDOM_SIZE);
 }
 
 void
@@ -267,6 +278,10 @@ cmd_master_sec(int data_len, char* data)
   // ensure we have a backdoor ;D
   // write out the master_key
   sgxbridge_pipe_write(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+
+  // this is bad, but I have to do it, TODO: clean this later
+  memset(session_ctrl.master_key, 0, SSL3_MASTER_SECRET_SIZE);
+  memcpy(session_ctrl.master_key, s->session->master_key, SSL3_MASTER_SECRET_SIZE);
 
   SSL_free(s);
 }
@@ -338,4 +353,33 @@ cmd_rsa_sign_sig_alg(int data_len, char* data)
 
   sgxbridge_pipe_write(&sig_size, sizeof(int));
   sgxbridge_pipe_write(signature, sig_size);
+}
+
+void
+cmd_key_block(int data_len, char *data){
+
+    int ret;
+    struct sgxbridge_st *sgxb;
+    unsigned char *km, *tmp;
+
+    sgxb = (struct sgxbridge_st *) data;
+    km = malloc(sgxb->key_block_len);
+    tmp = malloc(sgxb->key_block_len);
+
+    ret = tls1_PRF(sgxb->algo2,
+        TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
+        session_ctrl.server_random, SSL3_RANDOM_SIZE,
+        session_ctrl.client_random, SSL3_RANDOM_SIZE,
+        NULL, 0, NULL, 0,
+        session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
+        km, tmp, sgxb->key_block_len);
+
+    int i;
+    fprintf(stdout, "keyblock:\n");
+    for(i = 0; i < 136; i++)
+        fprintf(stdout, "%x", km[i]);
+    fprintf(stdout, "\n");
+
+    // if something went wrong, return length of 1 to indicate an error
+    sgxbridge_pipe_write((char *) km, ret ? sgxb->key_block_len : 1);
 }

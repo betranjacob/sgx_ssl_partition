@@ -58,6 +58,7 @@ void cmd_premaster(int data_len, char* data);
 void cmd_master_sec(int data_len, char* data);
 void cmd_rsa_sign(int data_len, char* data);
 void cmd_rsa_sign_sig_alg(int data_len, char* data);
+void cmd_key_block(int data_len, char *data);
 
 extern int cmd_counter;
 extern EVP_PKEY* private_key;

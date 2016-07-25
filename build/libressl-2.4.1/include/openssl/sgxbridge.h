@@ -1,6 +1,8 @@
 #ifndef _SGXBRIDGE_H_
 #define _SGXBRIDGE_H_
 
+#include <openssl/ssl.h>
+
 #define CMD_MAX_BUF_SIZE 1024
 	
 #define CMD_SESS_ID    "sess_id"
@@ -11,6 +13,7 @@
 #define CMD_ALGO       "algo"
 #define CMD_RSA_SIGN   "rsa_sign"
 #define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
+#define CMD_KEY_BLOCK "key_block"
 
 #define NAME_BUF_SIZE 256
 
@@ -27,5 +30,10 @@ void sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size,
                            unsigned char* op_sig, int* sig_size);
 int sgxbridge_fetch_operation(int* cmd_len, char* cmd, int* data_len,
                               char* data);
+
+typedef struct {
+  int key_block_len;
+  long algo2;
+} sgxbridge_st;
 
 #endif /* _SGXBRIDGE_H_ */
