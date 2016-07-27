@@ -14,6 +14,7 @@
 #define CMD_RSA_SIGN   "rsa_sign"
 #define CMD_RSA_SIGN_SIG_ALG "rsa_sign_algo"
 #define CMD_KEY_BLOCK "key_block"
+#define CMD_FINAL_FINISH_MAC "final_finish_mac"
 
 #define NAME_BUF_SIZE 256
 
@@ -34,6 +35,9 @@ int sgxbridge_fetch_operation(int* cmd_len, char* cmd, int* data_len,
 typedef struct {
   int key_block_len;
   long algo2;
+  char str[16];
+  int str_len;
+  unsigned char buf[2 * EVP_MAX_MD_SIZE];
 } sgxbridge_st;
 
 #endif /* _SGXBRIDGE_H_ */

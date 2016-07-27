@@ -102,6 +102,7 @@ register_commands()
   register_command(CMD_RSA_SIGN, cmd_rsa_sign);
   register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
   register_command(CMD_KEY_BLOCK, cmd_key_block);
+  register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
 }
 
 // needs to be called before the command can be used
@@ -359,10 +360,10 @@ void
 cmd_key_block(int data_len, char *data){
 
     int ret;
-    struct sgxbridge_st *sgxb;
+    sgxbridge_st *sgxb;
     unsigned char *km, *tmp;
 
-    sgxb = (struct sgxbridge_st *) data;
+    sgxb = (sgxbridge_st *) data;
     km = malloc(sgxb->key_block_len);
     tmp = malloc(sgxb->key_block_len);
 
@@ -382,4 +383,31 @@ cmd_key_block(int data_len, char *data){
 
     // if something went wrong, return length of 1 to indicate an error
     sgxbridge_pipe_write((char *) km, ret ? sgxb->key_block_len : 1);
+}
+
+void
+cmd_final_finish_mac(int data_len, char *data){
+
+  int ret;
+  sgxbridge_st *sgxb;
+  unsigned char buf2[12];
+  unsigned char peer_finish_md[2 * EVP_MAX_MD_SIZE];
+
+  sgxb = (sgxbridge_st *) data;
+
+  ret = tls1_PRF(sgxb->algo2,
+      sgxb->str, sgxb->str_len,
+      sgxb->buf, sgxb->key_block_len,
+      NULL, 0, NULL, 0, NULL, 0,
+      session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
+      peer_finish_md, buf2, sizeof(buf2));
+
+  int i;
+  fprintf(stdout, "final finish MAC:\n");
+  for(i = 0; i < 2 * EVP_MAX_MD_SIZE; i++)
+      fprintf(stdout, "%x", peer_finish_md[i]);
+  fprintf(stdout, "\n");
+
+  // if something went wrong, return length of 1 to indicate an error
+  sgxbridge_pipe_write((char *) peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
 }
