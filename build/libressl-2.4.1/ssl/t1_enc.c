@@ -1183,11 +1183,37 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
 		}
 	}
 
+#ifdef OPENSSL_WITH_SGX
+        fprintf(stdout, "delegating final finish MAC to enclave \n");
+
+        sgxbridge_st sgxb;
+        sgxb.key_block_len = (int) (q - buf);
+        sgxb.algo2 = ssl_get_algorithm2(s);
+        strncpy(sgxb.str, str, slen);
+        sgxb.str_len = slen;
+        memcpy(sgxb.buf, buf, (int) (q - buf));
+
+        sgxbridge_pipe_write_cmd(CMD_FINAL_FINISH_MAC,
+                sizeof(sgxbridge_st),
+                (char *) &sgxb);
+        sgxbridge_pipe_read(2 * EVP_MAX_MD_SIZE, (char *) out);
+
+        if(sgxb.key_block_len == 1)
+            err = 1;
+
+        fprintf(stdout, "final finish MAC (%d): %s\n",
+            s->s3->tmp.peer_finish_md_len, str);
+
+        for(i = 0; i < s->s3->tmp.peer_finish_md_len; i++)
+            fprintf(stdout, "%x", out[i]);
+        fprintf(stdout, "\n");
+#else
 	if (!tls1_PRF(ssl_get_algorithm2(s), str, slen, buf, (int)(q - buf),
 	    NULL, 0, NULL, 0, NULL, 0,
 	    s->session->master_key, s->session->master_key_length,
 	    out, buf2, sizeof buf2))
 		err = 1;
+#endif
 	EVP_MD_CTX_cleanup(&ctx);
 
 	if (err)
