@@ -81,15 +81,16 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
 void
 sgxbridge_pipe_read(int len, char* data)
 {
-  int fd = fd_ssl_sgx;
+  int fd = fd_sgx_ssl;
 
 #ifdef SGX_ENCLAVE
-  fd = fd_sgx_ssl;
+  fd = fd_ssl_sgx;
 #endif
 
   read(fd, data, len);
 }
 
+void
 sgxbridge_pipe_write(char* data, int len)
 {
   int fd = fd_ssl_sgx;
