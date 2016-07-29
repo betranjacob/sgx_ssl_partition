@@ -103,25 +103,20 @@ sgxbridge_pipe_write(char* data, int len)
 }
 
 void
-sgxbridge_pipe_write_cmd(char* cmd, int len, char* data)
+sgxbridge_pipe_write_cmd(int cmd, int len, char* data)
 {
   int fd = fd_ssl_sgx;
-
+  cmd_pkt_t cmd_pkt;
 #ifdef SGX_ENCLAVE
   fd = fd_sgx_ssl;
 #endif
 
-  printf("sgxbridge_pipe_write, cmd: %s, len: %d\n", cmd, len);
+  printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
   print_hex(data, len);
-
-  int cmd_len = strlen(cmd);
-
-  write(fd, &cmd_len, sizeof(int));
-  write(fd, cmd, cmd_len + 1);
-
-  write(fd, &len, sizeof(int));
-  if (len > 0)
-    write(fd, data, len);
+  cmd_pkt.cmd = cmd;
+  cmd_pkt.data_len = len;
+  memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
+  write(fd, &cmd_pkt, sizeof(cmd_pkt));
 }
 
 int
@@ -155,43 +150,22 @@ sgxbridge_init()
 }
 
 int
-sgxbridge_fetch_operation(int* cmd_len, char* cmd, int* data_len, char* data)
+sgxbridge_fetch_operation(int* cmd, int* data_len, char* data)
 {
   int fd = fd_sgx_ssl;
-
+  cmd_pkt_t cmd_pkt;
 #ifdef SGX_ENCLAVE
   fd = fd_ssl_sgx;
 #endif
 
-  // read in comand length
-  if (read(fd, cmd_len, sizeof(int)) > 0) {
-    if (*cmd_len > CMD_MAX_BUF_SIZE) {
-      return 0;
-    }
-    // *cmd = malloc(sizeof(char) * (*cmd_len+1));
-    // data = NULL;
-
-    // read in command
-    read(fd, cmd, *cmd_len + 1);
-
-    // read in data
-    if (read(fd, data_len, sizeof(int)) > 0) {
-      if (*data_len > CMD_MAX_BUF_SIZE) {
-        return 0;
-      }
-
-      if (*data_len > 0) {
-        // *data = malloc(sizeof(char) * (*data_len));
-        read(fd, data, *data_len);
-      }
-
-      printf("fetch_operation, cmd: %s, len: %d\n", cmd, *data_len);
-      print_hex(data, *data_len);
-
-      return 1;
-    }
+  if (read(fd, &cmd_pkt, sizeof(cmd_pkt_t)) > 0) {
+    *cmd = cmd_pkt.cmd;
+    *data_len = cmd_pkt.data_len;
+    memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
+    printf("fetch_operation, cmd: %d, len: %d\n", cmd, *data_len);
+    print_hex(data, *data_len);
+    return 1;
   }
-
   return 0;
 }
 

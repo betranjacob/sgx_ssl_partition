@@ -11,8 +11,8 @@ SSL* s;
 
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
-char priv_key_file[] = "/usr/local/nginx/conf/cert.key";
-char cert_file[] = "/usr/local/nginx/conf/cert.pem";
+char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
+char cert_file[] = "/etc/nginx/ssl/nginx.cert";
 
 /* main operation. communicate with tor-gencert & tor process */
 void
@@ -23,14 +23,18 @@ enclave_main(int argc, char** argv)
     sgx_exit(NULL);
   }
 
+  printf("hello\n");
   // initialize the ssl library
   SSL_library_init();
+    printf("hello\n");
   SSL_load_error_strings();
+    printf("hello\n");
 
   printf("SSL Initialised \n");
-
+  printf("hello\n");
   /* Load Private Key and certificate to SSL_CTX structure */
   load_pKey_and_cert_to_ssl_ctx();
+    printf("hello\n");
 
   /* initialize the commnads */
   register_commands();
@@ -107,12 +111,12 @@ register_commands()
 
 // needs to be called before the command can be used
 void
-register_command(char* name, void (*callback)(int, char*))
+register_command(int cmd, void (*callback)(int, char*))
 {
   // just add it to our static array.
-  if (cmd_counter < MAX_COMMANDS) {
-    _commands[cmd_counter].name = name;
-    _commands[cmd_counter++].callback = callback;
+  if (cmd < MAX_COMMANDS) {
+    _commands[cmd].cmd_num = cmd;
+    _commands[cmd].callback = callback;
   } else {
     // TODO: error, too many commands
     printf("ERROR: command array full, increase MAX_COMMANDS\n");
@@ -121,28 +125,12 @@ register_command(char* name, void (*callback)(int, char*))
 
 // tries to match incoming command to a registered one, executes if found
 void
-check_commands(int cmd_len, char* cmd, int data_len, char* data)
+check_commands(int cmd, int data_len, char* data)
 {
-  cmd_t* command;
-  int i;
-
-  // just in case
-  if (cmd == NULL) {
-    return;
-  }
-
-  // for each registered command try to match its name with what we received
-  for (i = 0; i < cmd_counter; i++) {
-    command = &_commands[i];
-
-    // check commands
-    if (!strncmp(command->name, cmd, cmd_len)) {
-      printf("execuitng command: %s\n", command->name);
-      command->callback(data_len, data);
-      // dont need to check further
-      return;
-    }
-  }
+  if(cmd == _commands[cmd].cmd_num){
+    printf("Execuitng command: %d\n", cmd);
+    _commands[cmd].callback(data_len, data);
+  } 
 }
 
 // reads in an operation (in form cmd_len, cmd, data_len, data) from named pipe
@@ -150,17 +138,11 @@ check_commands(int cmd_len, char* cmd, int data_len, char* data)
 void
 run_command_loop()
 {
-  char *cmd, *data;
-  int cmd_len, data_len;
-
-  // TODO: figure out how to assign dynamically in sgxbridge_fetch_operation
-  char buf1[CMD_MAX_BUF_SIZE];
-  char buf2[CMD_MAX_BUF_SIZE];
-  cmd = buf1;
-  data = buf2;
+  int cmd, data_len;
+  char data[CMD_MAX_BUF_SIZE];
 
   // read in operation
-  if (sgxbridge_fetch_operation(&cmd_len, cmd, &data_len, data)) {
+  if (sgxbridge_fetch_operation(&cmd, &data_len, data)) {
 
     // DEBUG
     // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
@@ -169,7 +151,7 @@ run_command_loop()
     // printf("data:\n");
     // print_hex(data, data_len);
 
-    check_commands(cmd_len, cmd, data_len, data);
+    check_commands(cmd, data_len, data);
   } else {
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes

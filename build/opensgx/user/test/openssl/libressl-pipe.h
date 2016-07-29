@@ -29,7 +29,7 @@
 typedef struct
 {
   void (*callback)(int, char*);
-  char* name;
+  int cmd_num;
 } cmd_t;
 
 typedef struct
@@ -44,9 +44,9 @@ typedef struct
 // prototypes
 void open_pipes();
 void load_pKey_and_cert_to_ssl_ctx();
-void register_command(char* name, void (*callback)(int, char*));
+void register_command(int cmd, void (*callback)(int, char*));
 void register_commands();
-void check_commands(int cmd_len, char* cmd, int data_len, char* data);
+void check_commands(int cmd, int data_len, char* data);
 void run_command_loop();
 
 // TODO: write a macro for commands
