@@ -23,12 +23,9 @@ enclave_main(int argc, char** argv)
     sgx_exit(NULL);
   }
 
-  printf("hello\n");
   // initialize the ssl library
   SSL_library_init();
-    printf("hello\n");
   SSL_load_error_strings();
-    printf("hello\n");
 
   printf("SSL Initialised \n");
   printf("hello\n");
