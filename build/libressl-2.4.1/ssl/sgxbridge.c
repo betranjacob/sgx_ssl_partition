@@ -162,7 +162,7 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, char* data)
     *cmd = cmd_pkt.cmd;
     *data_len = cmd_pkt.data_len;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
-    printf("fetch_operation, cmd: %d, len: %d\n", cmd, *data_len);
+    printf("fetch_operation, cmd: %d, len: %d\n", *cmd, *data_len);
     print_hex(data, *data_len);
     return 1;
   }
