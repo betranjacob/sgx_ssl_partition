@@ -97,7 +97,6 @@ register_commands()
   register_command(CMD_SESS_ID, cmd_sess_id);
   register_command(CMD_CLNT_RAND, cmd_clnt_rand);
   register_command(CMD_SRV_RAND, cmd_srv_rand);
-  register_command(CMD_ALGO, cmd_algo);
   register_command(CMD_PREMASTER, cmd_premaster);
   register_command(CMD_MASTER_SEC, cmd_master_sec);
   register_command(CMD_RSA_SIGN, cmd_rsa_sign);
@@ -217,16 +216,6 @@ cmd_srv_rand(int data_len, char* data)
   session_ctrl.server_random = malloc(SSL3_RANDOM_SIZE);
   memset(session_ctrl.server_random, 0, SSL3_RANDOM_SIZE);
   memcpy(session_ctrl.server_random, s->s3->server_random, SSL3_RANDOM_SIZE);
-}
-
-void
-cmd_algo(int data_len, char* data)
-{
-  session_ctrl.algo = *((long*)data);
-
-  // DEBUG
-  puts("algo:\n");
-  print_hex(&session_ctrl.algo, data_len);
 }
 
 void

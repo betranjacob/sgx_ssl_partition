@@ -10,7 +10,6 @@
 #define CMD_SRV_RAND 2
 #define CMD_PREMASTER 3
 #define CMD_MASTER_SEC 4
-#define CMD_ALGO 5
 #define CMD_RSA_SIGN 6
 #define CMD_RSA_SIGN_SIG_ALG 7
 #define CMD_KEY_BLOCK 8
