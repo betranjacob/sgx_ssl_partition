@@ -196,7 +196,6 @@ int
 sgxbridge_get_master_secret(unsigned char* buf)
 {
   sgxbridge_pipe_write_cmd(CMD_MASTER_SEC, 1, "m");
-  read(fd_sgx_ssl, buf, SSL3_MASTER_SECRET_SIZE);
 
   return SSL3_MASTER_SECRET_SIZE;
 }

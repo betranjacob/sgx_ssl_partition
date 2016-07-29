@@ -1309,6 +1309,11 @@ int
 tls1_generate_master_secret(SSL *s, unsigned char *out, unsigned char *p,
     int len)
 {
+#ifdef OPENSSL_WITH_SGX
+        long algo2 = ssl_get_algorithm2(s);
+        sgxbridge_pipe_write_cmd(CMD_MASTER_SEC, sizeof(algo2), (char *) &algo2);
+        s->session->master_key_length = SSL3_MASTER_SECRET_SIZE;
+#else
 	unsigned char buff[SSL_MAX_MASTER_KEY_LENGTH];
 
 	tls1_PRF(ssl_get_algorithm2(s),
@@ -1316,7 +1321,7 @@ tls1_generate_master_secret(SSL *s, unsigned char *out, unsigned char *p,
 	    s->s3->client_random, SSL3_RANDOM_SIZE, NULL, 0,
 	    s->s3->server_random, SSL3_RANDOM_SIZE, NULL, 0,
 	    p, len, s->session->master_key, buff, sizeof buff);
-
+#endif
 	return (SSL3_MASTER_SECRET_SIZE);
 }
 

@@ -1769,27 +1769,10 @@ ssl3_get_client_key_exchange(SSL *s)
 			p = fakekey;
 		}
 
-		#ifdef OPENSSL_WITH_SGX
-	    /* temporaily (until we can generate session keys) get master secret from enclave */
-	    long algo = ssl_get_algorithm2(s);
-        
-        printf("a: %ld\n", algo);
-	    
-	    sgxbridge_pipe_write_cmd(CMD_ALGO, sizeof(long), &algo);
-	    s->session->master_key_length = sgxbridge_get_master_secret(s->session->master_key);
-
-	    printf("master_secret_enclave:\n");
-		print_hex(s->session->master_key, s->session->master_key_length);
-
-		#else
-	    s->session->master_key_length =
-		    s->method->ssl3_enc->generate_master_secret(s,
-		    s->session->master_key,
-		    p, i);
-		#endif
-		
-		printf("master_secret:\n");
-		print_hex(s->session->master_key, s->session->master_key_length);
+                s->session->master_key_length =
+                  s->method->ssl3_enc->generate_master_secret(s,
+                      s->session->master_key,
+                      p, i);
 
 		explicit_bzero(p, i);
 	} else if (alg_k & SSL_kDHE) {

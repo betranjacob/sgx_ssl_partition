@@ -53,7 +53,6 @@ void run_command_loop();
 void cmd_sess_id(int data_len, char* data);
 void cmd_clnt_rand(int data_len, char* data);
 void cmd_srv_rand(int data_len, char* data);
-void cmd_algo(int data_len, char* data);
 void cmd_premaster(int data_len, char* data);
 void cmd_master_sec(int data_len, char* data);
 void cmd_rsa_sign(int data_len, char* data);
