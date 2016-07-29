@@ -1310,12 +1310,8 @@ tls1_generate_master_secret(SSL *s, unsigned char *out, unsigned char *p,
     int len)
 {
 #ifdef OPENSSL_WITH_SGX
-        sgxbridge_st sgxb;
-        sgxb.algo2 = ssl_get_algorithm2(s);
-
-        sgxbridge_pipe_write_cmd(CMD_MASTER_SEC,
-                sizeof(sgxbridge_st),
-                (char *) &sgxb);
+        long algo2 = ssl_get_algorithm2(s);
+        sgxbridge_pipe_write_cmd(CMD_MASTER_SEC, sizeof(algo2), (char *) &algo2);
         s->session->master_key_length = SSL3_MASTER_SECRET_SIZE;
 #else
 	unsigned char buff[SSL_MAX_MASTER_KEY_LENGTH];

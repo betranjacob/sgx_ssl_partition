@@ -235,11 +235,10 @@ void
 cmd_master_sec(int data_len, char* data)
 {
   int ret;
-  sgxbridge_st *sgxb;
-  sgxb = (sgxbridge_st *) data;
+  long *algo2 = (long *) data;
   unsigned char buf[SSL_MAX_MASTER_KEY_LENGTH];
 
-  ret = tls1_PRF(sgxb->algo2,
+  ret = tls1_PRF(*algo2,
       TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
       session_ctrl.client_random, SSL3_RANDOM_SIZE, NULL, 0,
       session_ctrl.server_random, SSL3_RANDOM_SIZE, NULL, 0,
