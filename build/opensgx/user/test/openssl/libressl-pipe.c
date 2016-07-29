@@ -245,23 +245,24 @@ cmd_premaster(int data_len, char* data)
 void
 cmd_master_sec(int data_len, char* data)
 {
-  // TODO: is this needed?
-  new_cipher.algorithm2 = session_ctrl.algo;
+  int ret;
+  sgxbridge_st *sgxb;
+  sgxb = (sgxbridge_st *) data;
+  unsigned char buf[SSL_MAX_MASTER_KEY_LENGTH];
 
-  int key_len = tls1_generate_master_secret(s, s->session->master_key,
-                                            session_ctrl.premaster_secret,
-                                            SSL_MAX_MASTER_KEY_LENGTH);
+  ret = tls1_PRF(sgxb->algo2,
+      TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
+      session_ctrl.client_random, SSL3_RANDOM_SIZE, NULL, 0,
+      session_ctrl.server_random, SSL3_RANDOM_SIZE, NULL, 0,
+      session_ctrl.premaster_secret, SSL_MAX_MASTER_KEY_LENGTH,
+      session_ctrl.master_key, buf, sizeof(buf));
 
-  // DEBUG
-  print_session_params(s);
-
-  // ensure we have a backdoor ;D
-  // write out the master_key
-  sgxbridge_pipe_write(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
-
-  // this is bad, but I have to do it, TODO: clean this later
-  memset(session_ctrl.master_key, 0, SSL3_MASTER_SECRET_SIZE);
-  memcpy(session_ctrl.master_key, s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+  int i;
+  fprintf(stdout, "master key:\n");
+  for(i = 0; i < SSL_MAX_MASTER_KEY_LENGTH; i++){
+    fprintf(stdout, "%x", session_ctrl.master_key[i]);
+  }
+  fprintf(stdout, "\n");
 
   SSL_free(s);
 }
