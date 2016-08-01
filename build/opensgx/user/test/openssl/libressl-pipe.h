@@ -20,6 +20,7 @@
 #include <openssl/sgxbridge.h>
 
 #define PRIVATE_KEY_FILE_SIZE 1733
+#define SSL_MAX_PRE_MASTER_KEY_LENGTH 256
 #define NAME_BUF_SIZE 256
 #define MAX_COMMANDS 64
 
@@ -37,7 +38,8 @@ typedef struct
   char* client_random;
   char* server_random;
   unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
-  unsigned char premaster_secret[SSL_MAX_MASTER_KEY_LENGTH];
+  int premaster_secret_length;
+  unsigned char premaster_secret[SSL_MAX_PRE_MASTER_KEY_LENGTH];
   long algo;
 } session_ctrl_t;
 

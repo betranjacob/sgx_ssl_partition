@@ -224,13 +224,13 @@ void
 cmd_premaster(int data_len, char* data)
 {
   // decrypt premaster secret (TODO: need to do anyt with i?)
-  int i =
+	session_ctrl.premaster_secret_length =
     RSA_private_decrypt(data_len, (unsigned char*)data,
                         session_ctrl.premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
   puts("decrypted premaster secret:\n");
-  print_hex(session_ctrl.premaster_secret, SSL_MAX_MASTER_KEY_LENGTH);
+  print_hex(session_ctrl.premaster_secret, session_ctrl.premaster_secret_length);
 }
 
 void
@@ -244,7 +244,7 @@ cmd_master_sec(int data_len, char* data)
       TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
       session_ctrl.client_random, SSL3_RANDOM_SIZE, NULL, 0,
       session_ctrl.server_random, SSL3_RANDOM_SIZE, NULL, 0,
-      session_ctrl.premaster_secret, SSL_MAX_MASTER_KEY_LENGTH,
+      session_ctrl.premaster_secret, session_ctrl.premaster_secret_length,
       session_ctrl.master_key, buf, sizeof(buf));
 
   int i;
@@ -254,9 +254,11 @@ cmd_master_sec(int data_len, char* data)
   }
   fprintf(stdout, "\n");
 
-  SSL_free(s);
+  if(s != NULL){
+	  SSL_free(s);
+	  s = NULL;
+  }
 }
-
 void
 cmd_rsa_sign(int data_len, char* data)
 {
@@ -304,8 +306,8 @@ cmd_rsa_sign_sig_alg(int data_len, char* data)
 
   EVP_MD_CTX_init(&md_ctx);
   EVP_SignInit_ex(&md_ctx, md, NULL);
-  EVP_SignUpdate(&md_ctx, s->s3->client_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, s->s3->server_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, session_ctrl.client_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, session_ctrl.server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
   if (!EVP_SignFinal(&md_ctx, &signature[4], (unsigned int*)&sig_size,
@@ -468,7 +470,7 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
 	EC_POINT *clnt_ecpoint = NULL;
 	BN_CTX *bn_ctx = NULL;
 	const EC_GROUP *group;
-	int ec_key_size, pm_key_size;
+	int ec_key_size;
 
 	group = EC_KEY_get0_group(ecdh);
 	if (group == NULL) {
@@ -499,21 +501,20 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
 		return;
 	}
 
-	pm_key_size = ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
-	if (pm_key_size <= 0) {
+	session_ctrl.premaster_secret_length = ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
+	if (session_ctrl.premaster_secret_length <= 0) {
 		fprintf(stderr, "ECDH_compute_key() failed \n");
 		return;
 	}
-
-	memcpy(session_ctrl.master_key, data, pm_key_size);
 	fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
-			pm_key_size);
+			session_ctrl.premaster_secret_length);
+
+	memcpy(session_ctrl.premaster_secret, data, session_ctrl.premaster_secret_length);
+
 	EC_POINT_free(clnt_ecpoint);
 	BN_CTX_free(bn_ctx);
 	EC_KEY_free(ecdh);
 
-	//s->session->master_key_length = s->method->ssl3_enc->generate_master_secret(s, s->session->master_key, p, i);
-
-	sgxbridge_pipe_write(&pm_key_size, sizeof(int));
-	sgxbridge_pipe_write(data, pm_key_size);
+	sgxbridge_pipe_write(&session_ctrl.premaster_secret_length, sizeof(int));
+	sgxbridge_pipe_write(data, session_ctrl.premaster_secret_length);
 }

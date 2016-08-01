@@ -2005,10 +2005,10 @@ ssl3_get_client_key_exchange(SSL *s)
 		s->s3->tmp.ecdh = NULL;
 
 
+#endif
 		/* Compute the master secret */
 		s->session->master_key_length = s->method->ssl3_enc-> \
 		    generate_master_secret(s, s->session->master_key, p, i);
-#endif
 
 		explicit_bzero(p, i);
 		return (ret);
