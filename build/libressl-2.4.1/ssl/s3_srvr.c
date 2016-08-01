@@ -1797,9 +1797,9 @@ ssl3_get_client_key_exchange(SSL *s)
 		}
 #endif
 
-        s->session->master_key_length = 
-        	s->method->ssl3_enc->generate_master_secret(
-        		s, s->session->master_key, p, i);
+                s->session->master_key_length =
+                        s->method->ssl3_enc->generate_master_secret(
+                                s, s->session->master_key, p, i);
 
 		explicit_bzero(p, i);
 	} else if (alg_k & SSL_kDHE) {

@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
@@ -49,6 +50,7 @@ void load_pKey_and_cert_to_ssl_ctx();
 void register_command(int cmd, void (*callback)(int, char*));
 void register_commands();
 void check_commands(int cmd, int data_len, char* data);
+void init_session();
 void run_command_loop();
 
 // TODO: write a macro for commands

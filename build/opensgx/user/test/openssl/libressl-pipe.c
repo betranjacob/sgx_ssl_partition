@@ -38,6 +38,10 @@ enclave_main(int argc, char** argv)
 
   printf("Commands registered \n");
 
+  printf("Initializing session ctrl...\n");
+  init_session();
+  printf("Session ctrl initialized\n");
+
   // pipe read loop:
   //   -> fetch in command_len -> command -> data_len -> data
   //   -> call the appriopriate command function
@@ -46,14 +50,28 @@ enclave_main(int argc, char** argv)
   }
 }
 
+void
+init_session()
+{
+  if((session_ctrl.server_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
+    fprintf(stderr, "server random calloc() failed: %s\n", strerror(errno));
+    sgx_exit(NULL);
+  }
+
+  if((session_ctrl.client_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
+    fprintf(stderr, "client random calloc() failed: %s\n", strerror(errno));
+    sgx_exit(NULL);
+  }
+}
+
 // just some debug output
 void
 print_session_params(SSL* s)
 {
   printf("client_random:\n");
-  print_hex(s->s3->client_random, SSL3_RANDOM_SIZE);
+  print_hex(session_ctrl.client_random, SSL3_RANDOM_SIZE);
   printf("server_random:\n");
-  print_hex(s->s3->server_random, SSL3_RANDOM_SIZE);
+  print_hex(session_ctrl.server_random, SSL3_RANDOM_SIZE);
   printf("master_key:\n");
   print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
 }
@@ -186,17 +204,12 @@ void
 cmd_clnt_rand(int data_len, char* data)
 {
   // TODO: check on data_len?
-  memcpy(s->s3->client_random, data, SSL3_RANDOM_SIZE);
+  memcpy(session_ctrl.client_random, data, SSL3_RANDOM_SIZE);
 
   // DOEBUG
   puts("client random:\n");
   // print_hex(session_ctrl.client_random, data_len);
-  print_hex(s->s3->client_random, data_len);
-
-  // this is bad, but I have to do it, TODO: clean this later
-  session_ctrl.client_random = malloc(SSL3_RANDOM_SIZE);
-  memset(session_ctrl.client_random, 0, SSL3_RANDOM_SIZE);
-  memcpy(session_ctrl.client_random, s->s3->client_random, SSL3_RANDOM_SIZE);
+  print_hex(session_ctrl.client_random, data_len);
 }
 
 void
@@ -205,19 +218,14 @@ cmd_srv_rand(int data_len, char* data)
   int i, random_len = *((int *)data);
 
   // TODO: check on data len
-  arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
+  arc4random_buf(session_ctrl.server_random, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("server random:\n");
-  print_hex((unsigned char*)s->s3->server_random, random_len);
+  print_hex((unsigned char*) session_ctrl.server_random, random_len);
 
   // Send the result
-  sgxbridge_pipe_write(s->s3->server_random, random_len);
-
-  // this is bad, but I have to do it, TODO: clean this later
-  session_ctrl.server_random = malloc(SSL3_RANDOM_SIZE);
-  memset(session_ctrl.server_random, 0, SSL3_RANDOM_SIZE);
-  memcpy(session_ctrl.server_random, s->s3->server_random, SSL3_RANDOM_SIZE);
+  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
 }
 
 void
