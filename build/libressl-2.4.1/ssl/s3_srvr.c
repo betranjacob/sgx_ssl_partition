@@ -1675,7 +1675,7 @@ ssl3_get_client_key_exchange(SSL *s)
 	unsigned long alg_k;
 	unsigned char *d, *p;
  	BIO *bio_out;
- 	unsigned char pre_master[2048];
+ 	unsigned char pre_master[256];
 	RSA *rsa = NULL;
 	EVP_PKEY *pkey = NULL;
 	BIGNUM *pub = NULL;
@@ -1888,10 +1888,8 @@ ssl3_get_client_key_exchange(SSL *s)
 		i = *p; // Get the Key Size.
 		p += 1; // Increment pointer to Key data.
 		printf(" Total size - [%d], KeySize [%d] \n", n, i);
-		sgxbridge_ecdhe_generate_pre_master_key(p, i, pre_master, &key_size);
-		printf(" Pre-Master from SGX : Size [%d] \n", key_size);
+		sgxbridge_ecdhe_generate_pre_master_key(p, i);
 		s->session->master_key_length = s->method->ssl3_enc->generate_master_secret(s, s->session->master_key, pre_master, key_size);
-
 #else
 
 		group = EC_KEY_get0_group(tkey); // Get group Key
@@ -2004,11 +2002,12 @@ ssl3_get_client_key_exchange(SSL *s)
 		EC_KEY_free(s->s3->tmp.ecdh);
 		s->s3->tmp.ecdh = NULL;
 
-
-#endif
 		/* Compute the master secret */
 		s->session->master_key_length = s->method->ssl3_enc-> \
 		    generate_master_secret(s, s->session->master_key, p, i);
+#endif
+
+
 
 		explicit_bzero(p, i);
 		return (ret);

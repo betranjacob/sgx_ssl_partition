@@ -230,11 +230,9 @@ void sgxbridge_ecdhe_get_public_param(unsigned char* curve_id, int c_size,
     read(fd_sgx_ssl, out, *size);
 }
 
-void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size,
-					 unsigned char* out, int* size)
+void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size)
+					 //unsigned char* out, int* size)
 {
     sgxbridge_pipe_write_cmd(CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
 
-    read(fd_sgx_ssl, size, sizeof(int));
-    read(fd_sgx_ssl, out, *size);
 }

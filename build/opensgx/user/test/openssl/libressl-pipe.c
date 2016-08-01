@@ -515,6 +515,4 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
 	BN_CTX_free(bn_ctx);
 	EC_KEY_free(ecdh);
 
-	sgxbridge_pipe_write(&session_ctrl.premaster_secret_length, sizeof(int));
-	sgxbridge_pipe_write(data, session_ctrl.premaster_secret_length);
 }

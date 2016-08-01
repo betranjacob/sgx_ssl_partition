@@ -34,8 +34,7 @@ void sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size,
 int sgxbridge_fetch_operation(int* cmd, int* data_len, char* data);
 void sgxbridge_ecdhe_get_public_param(unsigned char* curve_id, int c_size, 
 				      unsigned char* out, int* size);
-void sgxbridge_ecdhe_generate_master_key(unsigned char* client_pub, int k_size, 
-					 unsigned char* out, int* size);
+void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size);
 
 typedef struct
 {
