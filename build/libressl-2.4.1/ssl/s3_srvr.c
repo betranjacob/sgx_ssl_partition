@@ -1274,6 +1274,31 @@ ssl3_send_server_key_exchange(SSL *s)
 			r[1] = dh->g;
 			r[2] = dh->pub_key;
 		} else if (type & SSL_kECDHE) {
+
+#ifdef	OPENSSL_WITH_SGX
+			int ep_public_len = 0;
+			int ec_curve_id = tls1_get_shared_curve(s);
+			fprintf(stderr, " Elliptic Curve ID %d \n", ec_curve_id);
+
+			ecdhe_params *ep  = (ecdhe_params *) calloc (sizeof(ecdhe_params), 1);
+			unsigned char *mem_ptr = (unsigned char *)ep;
+			sgxbridge_ecdhe_get_public_param((char *)&ec_curve_id, sizeof(int), mem_ptr, &ep_public_len);
+			ep = (ecdhe_params *)mem_ptr;
+
+			fprintf(stderr, "## EP Public Key from SGX : Size [%d], curve-id [%d], EncodedPoint-Length [%d], EncodedPoint-Key-Size [%d] ## \n", ep_public_len,
+																																			    ep->curve_id,
+																																				ep->encoded_length,
+																																				ep->rsa_public_key_size);
+#if 0
+			fprintf(stderr, "Encoded Point - ");
+			for(j=0;j<ep->encoded_length; j++)
+				fprintf(stderr, " [%x]", ep->encodedPoint[j]);
+				fprintf(stderr, "\n");
+#endif
+			encodedPoint = ep->encodedPoint;
+			encodedlen = ep->encoded_length;
+			curve_id = ep->curve_id;
+#else
 			const EC_GROUP *group;
 
 			ecdhp = cert->ecdh_tmp;
@@ -1373,7 +1398,7 @@ ssl3_send_server_key_exchange(SSL *s)
 
 			BN_CTX_free(bn_ctx);
 			bn_ctx = NULL;
-
+#endif
 			/*
 			 * XXX: For now, we only support named (not
 			 * generic) curves in ECDH ephemeral key exchanges.
@@ -1402,7 +1427,7 @@ ssl3_send_server_key_exchange(SSL *s)
 			nr[i] = BN_num_bytes(r[i]);
 			n += 2 + nr[i];
 		}
-
+#if 1
 		if (!(s->s3->tmp.new_cipher->algorithm_auth & SSL_aNULL)) {
 			if ((pkey = ssl_get_sign_pkey(
 			    s, s->s3->tmp.new_cipher, &md)) == NULL) {
@@ -1410,6 +1435,9 @@ ssl3_send_server_key_exchange(SSL *s)
 				goto f_err;
 			}
 			kn = EVP_PKEY_size(pkey);
+#else
+			//md = cert->key->digest;
+#endif
 		} else {
 			pkey = NULL;
 			kn = 0;
@@ -1483,9 +1511,9 @@ ssl3_send_server_key_exchange(SSL *s)
 					j += i;
 				}
 #ifdef OPENSSL_WITH_SGX
-				printf("Message Digest : len(%d) => ", j);
+				printf("Message Digest : Length(%d) => ", j);
 				sgxbridge_rsa_sign_md(md_buf, j, &(p[2]), &u);
-				printf("\n Signature : len(%d) => ", u);
+				printf("Signature : Length(%d) => ", u);
 #else
 				if (RSA_sign(NID_md5_sha1, md_buf, j,
 				    &(p[2]), &u, pkey->pkey.rsa) <= 0) {
@@ -1498,10 +1526,10 @@ ssl3_send_server_key_exchange(SSL *s)
 				n += u + 2;
 			} else if (md) {
 				/* Send signature algorithm. */
-#ifdef  OPENSSL_WITH_SGX // (This part is invoked , when SSL client has extensions, eg. firefox)
-				printf("\n DH PAram - : len(%d) ", n);
+#ifdef  OPENSSL_WITH_SGX // (This part is invoked, when SSL client has extensions, eg. firefox)
+				printf(" DH PAram - : Length(%d) \n", n);
 				sgxbridge_rsa_sign_sig_algo_ex(d, n, p, &i);
-				printf("\n Signature - [%x:%x] : len(%d) => ", p[0], p[1], i);
+				printf(" Signature - [%x:%x] : length(%d) => \n", p[0], p[1], i);
 				p += 2;
 				i -= 4;
 #else
@@ -1642,12 +1670,12 @@ int
 ssl3_get_client_key_exchange(SSL *s)
 {
 	printf("ssl3_get_client_key_exchange\n");
-	int i, al, ok;
+	int i, al, ok, key_size;
 	long n;
 	unsigned long alg_k;
 	unsigned char *d, *p;
  	BIO *bio_out;
-
+ 	unsigned char pre_master[2048];
 	RSA *rsa = NULL;
 	EVP_PKEY *pkey = NULL;
 	BIGNUM *pub = NULL;
@@ -1657,9 +1685,7 @@ ssl3_get_client_key_exchange(SSL *s)
 	EVP_PKEY *clnt_pub_pkey = NULL;
 	EC_POINT *clnt_ecpoint = NULL;
 	BN_CTX *bn_ctx = NULL;
-#ifdef OPENSSL_WITH_SGX 
-	bio_out = BIO_new_fp(stdout, BIO_NOCLOSE);
-#endif
+
 	/* 2048 maxlen is a guess.  How long a key does that permit? */
 	n = s->method->ssl_get_message(s, SSL3_ST_SR_KEY_EXCH_A,
 	    SSL3_ST_SR_KEY_EXCH_B, SSL3_MT_CLIENT_KEY_EXCHANGE, 2048, &ok);
@@ -1698,8 +1724,8 @@ ssl3_get_client_key_exchange(SSL *s)
 			n = i;
 
 #ifdef OPENSSL_WITH_SGX
-		// encrypted premaster secret
-		printf("Encrypted premaster secret size(%d) : ", n);
+		// encrypted premaster secret for RSA Cipher
+		printf("Encrypted Pre-Master secret size(%d) : ", n);
 		print_hex(p, n);
 
 		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int)n, (char*)p);
@@ -1708,10 +1734,10 @@ ssl3_get_client_key_exchange(SSL *s)
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
 
 		printf("RSA_private_decrypt return : %d\n", i);
-
+#if 0
 		printf("Decrypted premaster secret: ");
 		print_hex(p, i);
-
+#endif
 		ERR_clear_error();
 
 		al = -1;
@@ -1856,8 +1882,19 @@ ssl3_get_client_key_exchange(SSL *s)
 			tkey = s->s3->tmp.ecdh;
 		}
 
-		group = EC_KEY_get0_group(tkey);
-		priv_key = EC_KEY_get0_private_key(tkey);
+#ifdef OPENSSL_WITH_SGX
+
+		i = *p; // Get the Key Size.
+		p += 1; // Increment pointer to Key data.
+		printf(" Total size - [%d], KeySize [%d] \n", n, i);
+		sgxbridge_ecdhe_generate_pre_master_key(p, i, pre_master, &key_size);
+		printf(" Pre-Master from SGX : Size [%d] \n", key_size);
+		s->session->master_key_length = s->method->ssl3_enc->generate_master_secret(s, s->session->master_key, pre_master, key_size);
+
+#else
+
+		group = EC_KEY_get0_group(tkey); // Get group Key
+		priv_key = EC_KEY_get0_private_key(tkey); // Get EC Private Key Part
 
 		if (!EC_KEY_set_group(srvr_ecdh, group) ||
 		    !EC_KEY_set_private_key(srvr_ecdh, priv_key)) {
@@ -1970,6 +2007,7 @@ ssl3_get_client_key_exchange(SSL *s)
 		/* Compute the master secret */
 		s->session->master_key_length = s->method->ssl3_enc-> \
 		    generate_master_secret(s, s->session->master_key, p, i);
+#endif
 
 		explicit_bzero(p, i);
 		return (ret);

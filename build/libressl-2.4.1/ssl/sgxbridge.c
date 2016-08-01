@@ -219,3 +219,22 @@ sgxbridge_rsa_sign_sig_algo_ex(unsigned char* ip_md, int md_size,
   read(fd_sgx_ssl, sig_size, sizeof(int));
   read(fd_sgx_ssl, op_sig, *sig_size);
 }
+
+
+void sgxbridge_ecdhe_get_public_param(unsigned char* curve_id, int c_size,
+				      unsigned char* out, int* size)
+{
+    sgxbridge_pipe_write_cmd(CMD_GET_ECDHE_PUBLIC_PARAM, c_size, curve_id);
+
+    read(fd_sgx_ssl, size, sizeof(int));
+    read(fd_sgx_ssl, out, *size);
+}
+
+void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size,
+					 unsigned char* out, int* size)
+{
+    sgxbridge_pipe_write_cmd(CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
+
+    read(fd_sgx_ssl, size, sizeof(int));
+    read(fd_sgx_ssl, out, *size);
+}

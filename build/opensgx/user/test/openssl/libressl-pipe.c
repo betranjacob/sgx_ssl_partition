@@ -8,6 +8,8 @@ SSL_CIPHER new_cipher;
 cmd_t _commands[MAX_COMMANDS];
 session_ctrl_t session_ctrl;
 SSL* s;
+EC_KEY *ecdh;
+
 
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
@@ -28,10 +30,8 @@ enclave_main(int argc, char** argv)
   SSL_load_error_strings();
 
   printf("SSL Initialised \n");
-  printf("hello\n");
   /* Load Private Key and certificate to SSL_CTX structure */
   load_pKey_and_cert_to_ssl_ctx();
-    printf("hello\n");
 
   /* initialize the commnads */
   register_commands();
@@ -103,6 +103,8 @@ register_commands()
   register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
   register_command(CMD_KEY_BLOCK, cmd_key_block);
   register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
+  register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
+  register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_master_key);
 }
 
 // needs to be called before the command can be used
@@ -381,4 +383,137 @@ cmd_final_finish_mac(int data_len, char *data){
 
   // if something went wrong, return length of 1 to indicate an error
   sgxbridge_pipe_write((char *) peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
+}
+
+void cmd_ecdhe_get_public_param(int data_len, char* data)
+{
+	CERT *cert = ctx->cert;
+	const EC_GROUP *group;
+	BN_CTX *bn_ctx = NULL;
+	int ecdhe_params_size = 0;
+	ecdhe_params *ep = (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
+
+	int *d = (int *) data;
+	ecdh = EC_KEY_new_by_curve_name(*d);
+	if (ecdh == NULL) {
+		fprintf(stderr, " EC_KEY_new_by_curve_name() failed \n");
+		return;
+	}
+
+	if ((EC_KEY_get0_public_key(ecdh) == NULL)
+			|| (EC_KEY_get0_private_key(ecdh) == NULL)) {
+		/*(s->options & SSL_OP_SINGLE_ECDH_USE)) { */
+		fprintf(stderr, "One of the key missing generating key \n");
+		if (!EC_KEY_generate_key(ecdh)) {
+			fprintf(stderr, "EC_KEY_generate_key () failed \n");
+			return;
+		}
+	}
+
+	if ((((group = EC_KEY_get0_group(ecdh)) == NULL)
+			|| (EC_KEY_get0_public_key(ecdh) == NULL)
+			|| (EC_KEY_get0_private_key(ecdh)) == NULL)) {
+		fprintf(stderr, "EC_KEY_get0_group() failed \n");
+		return;
+	}
+
+	// For now, we only support ephemeral ECDH  keys over named (not generic) curves. For supported named curves, curve_id is non-zero.
+	if ((ep->curve_id = tls1_ec_nid2curve_id(EC_GROUP_get_curve_name(group)))
+			== 0) {
+		fprintf(stderr, "Failed to retrieve the group curve ID : \n");
+		return;
+	}
+
+	// Encode the public key.  First check the size of encoding and  allocate memory accordingly.
+	ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
+			POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+	if (ep->encoded_length > ENCODED_POINT_LEN_MAX) {
+		fprintf(stderr, " No enough memory to hold  ENCODED_POINT!!! %d \n",
+				ep->encoded_length);
+		return;
+	}
+
+	bn_ctx = BN_CTX_new();
+	if ((bn_ctx == NULL)) {
+		fprintf(stderr, " BN_CTX_new Failed  \n");
+		return;
+	}
+	ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
+			POINT_CONVERSION_UNCOMPRESSED, ep->encodedPoint, ep->encoded_length,
+			bn_ctx);
+	if (ep->encoded_length == 0) {
+		fprintf(stderr, " EC_POINT_point2oct() Failed  \n");
+		return;
+	}
+
+	fprintf(stderr, "Server EC public key created successfully size(%d) \n",
+			ep->encoded_length);
+	ep->rsa_public_key_size = EVP_PKEY_size(private_key);
+
+	BN_CTX_free(bn_ctx);
+	bn_ctx = NULL;
+
+	ecdhe_params_size = sizeof(ecdhe_params);
+
+	fprintf(stderr, "Private Key %d Data Size %d \n", ep->rsa_public_key_size,
+			ecdhe_params_size);
+
+	sgxbridge_pipe_write(&ecdhe_params_size, sizeof(int));
+	sgxbridge_pipe_write(ep, ecdhe_params_size);
+	free(ep);
+}
+
+void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
+{
+	EVP_PKEY *clnt_pub_pkey = NULL;
+	EC_POINT *clnt_ecpoint = NULL;
+	BN_CTX *bn_ctx = NULL;
+	const EC_GROUP *group;
+	int ec_key_size, pm_key_size;
+
+	group = EC_KEY_get0_group(ecdh);
+	if (group == NULL) {
+		fprintf(stderr, "EC_KEY_get0_group() failed \n");
+		return;
+	}
+
+	// Let's get client's public key
+	if ((clnt_ecpoint = EC_POINT_new(group)) == NULL) {
+		fprintf(stderr, "EC_POINT_new() failed \n");
+		return;
+	}
+
+	// Get client's public key from encoded point in the ClientKeyExchange message.
+	if ((bn_ctx = BN_CTX_new()) == NULL) {
+		fprintf(stderr, "BN_CTX_new() failed \n");
+		return;
+	}
+
+	if (EC_POINT_oct2point(group, clnt_ecpoint, data, data_len, bn_ctx) == 0) {
+		fprintf(stderr, "EC_POINT_oct2point() failed \n");
+		return;
+	}
+
+	ec_key_size = ECDH_size(ecdh);
+	if (ec_key_size <= 0) {
+		fprintf(stderr, "ECDH_size() failed \n");
+		return;
+	}
+
+	pm_key_size = ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
+	if (pm_key_size <= 0) {
+		fprintf(stderr, "ECDH_compute_key() failed \n");
+		return;
+	}
+
+	fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
+			pm_key_size);
+	EC_POINT_free(clnt_ecpoint);
+	BN_CTX_free(bn_ctx);
+	EC_KEY_free(ecdh);
+
+	//s->session->master_key_length = s->method->ssl3_enc->generate_master_secret(s, s->session->master_key, p, i);
+
+	sgxbridge_pipe_write(&pm_key_size, sizeof(int));
+	sgxbridge_pipe_write(data, pm_key_size);
 }
