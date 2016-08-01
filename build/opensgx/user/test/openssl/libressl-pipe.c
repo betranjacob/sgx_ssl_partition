@@ -351,6 +351,9 @@ cmd_key_block(int data_len, char *data){
 
     // if something went wrong, return length of 1 to indicate an error
     sgxbridge_pipe_write((char *) km, ret ? sgxb->key_block_len : 1);
+
+    free(km);
+    free(tmp);
 }
 
 void
