@@ -1,4 +1,4 @@
-BASE_CFLAGS = -g -w -Iinclude -Ishare/include -Wall -pedantic -Wno-unused-function -std=gnu11
+BASE_CFLAGS = -g -Iinclude -Ishare/include -Wall -pedantic -Wno-unused-function -std=gnu11
 
 # SGX LIB
 LIBSGXDIR = ../libsgx

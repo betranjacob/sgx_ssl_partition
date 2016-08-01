@@ -79,7 +79,7 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
 }
 
 void
-sgxbridge_pipe_read(int len, char* data)
+sgxbridge_pipe_read(int len, unsigned char* data)
 {
   int fd = fd_sgx_ssl;
 
@@ -91,7 +91,7 @@ sgxbridge_pipe_read(int len, char* data)
 }
 
 void
-sgxbridge_pipe_write(char* data, int len)
+sgxbridge_pipe_write(unsigned char* data, int len)
 {
   int fd = fd_ssl_sgx;
 
@@ -103,7 +103,7 @@ sgxbridge_pipe_write(char* data, int len)
 }
 
 void
-sgxbridge_pipe_write_cmd(int cmd, int len, char* data)
+sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data)
 {
   int fd = fd_ssl_sgx;
   cmd_pkt_t cmd_pkt;
@@ -112,7 +112,7 @@ sgxbridge_pipe_write_cmd(int cmd, int len, char* data)
 #endif
 
   printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
-  print_hex(data, len);
+  print_hex((unsigned char *) data, len);
   cmd_pkt.cmd = cmd;
   cmd_pkt.data_len = len;
   memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
@@ -150,7 +150,7 @@ sgxbridge_init()
 }
 
 int
-sgxbridge_fetch_operation(int* cmd, int* data_len, char* data)
+sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
 {
   int fd = fd_sgx_ssl;
   cmd_pkt_t cmd_pkt;
@@ -163,7 +163,7 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, char* data)
     *data_len = cmd_pkt.data_len;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
     printf("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
-    print_hex(data, *data_len);
+    print_hex((unsigned char *) data, *data_len);
     return 1;
   }
   return 0;
