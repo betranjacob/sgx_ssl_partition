@@ -104,7 +104,7 @@ register_commands()
   register_command(CMD_KEY_BLOCK, cmd_key_block);
   register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
   register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
-  register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_master_key);
+  register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
 }
 
 // needs to be called before the command can be used
@@ -403,7 +403,6 @@ void cmd_ecdhe_get_public_param(int data_len, char* data)
 	if ((EC_KEY_get0_public_key(ecdh) == NULL)
 			|| (EC_KEY_get0_private_key(ecdh) == NULL)) {
 		/*(s->options & SSL_OP_SINGLE_ECDH_USE)) { */
-		fprintf(stderr, "One of the key missing generating key \n");
 		if (!EC_KEY_generate_key(ecdh)) {
 			fprintf(stderr, "EC_KEY_generate_key () failed \n");
 			return;
@@ -506,6 +505,7 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
 		return;
 	}
 
+	memcpy(session_ctrl.master_key, data, pm_key_size);
 	fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
 			pm_key_size);
 	EC_POINT_free(clnt_ecpoint);
