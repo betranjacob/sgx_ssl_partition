@@ -1729,7 +1729,8 @@ ssl3_get_client_key_exchange(SSL *s)
 		print_hex(p, n);
 
 		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int)n, (char*)p);
-#endif
+
+#else
 
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
 
@@ -1794,11 +1795,11 @@ ssl3_get_client_key_exchange(SSL *s)
 			i = SSL_MAX_MASTER_KEY_LENGTH;
 			p = fakekey;
 		}
+#endif
 
-                s->session->master_key_length =
-                  s->method->ssl3_enc->generate_master_secret(s,
-                      s->session->master_key,
-                      p, i);
+        s->session->master_key_length = 
+        	s->method->ssl3_enc->generate_master_secret(
+        		s, s->session->master_key, p, i);
 
 		explicit_bzero(p, i);
 	} else if (alg_k & SSL_kDHE) {
