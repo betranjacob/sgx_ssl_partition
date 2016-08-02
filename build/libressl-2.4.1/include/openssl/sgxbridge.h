@@ -38,11 +38,11 @@ void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_si
 
 typedef struct
 {
-	char encodedPoint[ENCODED_POINT_LEN_MAX];
-	int encoded_length;
-	int curve_id;
-	int rsa_public_key_size;
-}ecdhe_params;
+  char encodedPoint[ENCODED_POINT_LEN_MAX];
+  int encoded_length;
+  int curve_id;
+  int rsa_public_key_size;
+} ecdhe_params;
 
 typedef struct
 {
@@ -55,8 +55,8 @@ typedef struct
 
 typedef struct
 {
- int cmd;
- int data_len;
- char data[CMD_MAX_BUF_SIZE];
-}cmd_pkt_t;
+  int cmd;
+  int data_len;
+  char data[CMD_MAX_BUF_SIZE];
+} cmd_pkt_t;
 #endif /* _SGXBRIDGE_H_ */
