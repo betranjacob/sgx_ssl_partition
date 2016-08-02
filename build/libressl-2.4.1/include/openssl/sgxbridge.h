@@ -27,7 +27,6 @@ void sgxbridge_pipe_read(int len, unsigned char* data);
 void sgxbridge_pipe_write(unsigned char* data, int len);
 void sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data);
 void print_hex(unsigned char* buf, int len);
-void sgxbridge_generate_server_random(void* buf, int nbytes);
 int sgxbridge_get_master_secret(unsigned char* buf);
 void sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size,
                            unsigned char* op_sig, int* sig_size);
