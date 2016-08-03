@@ -112,7 +112,7 @@ sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data)
 #endif
 
   printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
-  print_hex((unsigned char *) data, len);
+  print_hex(data, len);
   cmd_pkt.cmd = cmd;
   cmd_pkt.data_len = len;
   memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
@@ -163,7 +163,7 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
     *data_len = cmd_pkt.data_len;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
     printf("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
-    print_hex((unsigned char *) data, *data_len);
+    print_hex(data, *data_len);
     return 1;
   }
   return 0;
@@ -185,11 +185,14 @@ sgxbridge_generate_server_random(void* buf, int nbytes)
 {
   printf("generate_server_random\n");
 
-  sgxbridge_pipe_write_cmd(CMD_SRV_RAND, sizeof(int), &nbytes);
+  sgxbridge_pipe_write_cmd(CMD_SRV_RAND,
+      sizeof(int),
+      (unsigned char *) &nbytes);
+
   read(fd_sgx_ssl, buf, nbytes);
 
   printf("server_random:\n");
-  print_hex((unsigned char*)buf, nbytes);
+  print_hex((unsigned char *) buf, nbytes);
 }
 
 int
