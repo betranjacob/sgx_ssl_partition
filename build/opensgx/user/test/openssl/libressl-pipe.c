@@ -207,17 +207,23 @@ cmd_clnt_rand(int data_len, unsigned char* data)
 
   // DEBUG
   puts("client random:\n");
-  print_hex(session_ctrl.client_random, data_len);
+  print_hex((unsigned char *) session_ctrl.client_random, data_len);
 }
 
 void
 cmd_srv_rand(int data_len, unsigned char* data)
 {
-  memcpy(session_ctrl.server_random, data, data_len);
+  int random_len = *((int *)data);
+
+  // TODO: check on data len
+  arc4random_buf(session_ctrl.server_random, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("server random:\n");
-  print_hex(session_ctrl.server_random, data_len);
+  print_hex((unsigned char*) session_ctrl.server_random, random_len);
+
+  // Send the result
+  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
 }
 
 void

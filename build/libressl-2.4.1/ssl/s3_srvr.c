@@ -992,13 +992,10 @@ ssl3_get_client_hello(SSL *s)
 	 * SessionTicket processing to use it in key derivation.
 	 */
 
-	arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
-
 #ifdef OPENSSL_WITH_SGX
-        // provision server random to enclave
-        sgxbridge_pipe_write_cmd(CMD_SRV_RAND,
-            SSL3_RANDOM_SIZE,
-            s->s3->server_random);
+	sgxbridge_generate_server_random(s->s3->server_random, SSL3_RANDOM_SIZE);
+#else
+	arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
 #endif
 
 	if (!s->hit && s->tls_session_secret_cb) {

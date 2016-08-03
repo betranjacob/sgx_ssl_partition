@@ -180,6 +180,18 @@ print_hex(unsigned char* buf, int len)
   fflush(stdout);
 }
 
+void
+sgxbridge_generate_server_random(void* buf, int nbytes)
+{
+  printf("generate_server_random\n");
+
+  sgxbridge_pipe_write_cmd(CMD_SRV_RAND, sizeof(int), &nbytes);
+  read(fd_sgx_ssl, buf, nbytes);
+
+  printf("server_random:\n");
+  print_hex((unsigned char*)buf, nbytes);
+}
+
 int
 sgxbridge_get_master_secret(unsigned char* buf)
 {
