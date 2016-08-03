@@ -10,7 +10,6 @@ session_ctrl_t session_ctrl;
 SSL* s;
 EC_KEY *ecdh;
 
-
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
 char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
@@ -73,7 +72,7 @@ print_session_params(SSL* s)
   printf("server_random:\n");
   print_hex(session_ctrl.server_random, SSL3_RANDOM_SIZE);
   printf("master_key:\n");
-  print_hex(s->session->master_key, SSL3_MASTER_SECRET_SIZE);
+  print_hex(session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE);
 }
 
 // TODO: should the ctx be a parameter? other stuff?
@@ -127,7 +126,7 @@ register_commands()
 
 // needs to be called before the command can be used
 void
-register_command(int cmd, void (*callback)(int, char*))
+register_command(int cmd, void (*callback)(int, unsigned char*))
 {
   // just add it to our static array.
   if (cmd < MAX_COMMANDS) {
@@ -141,10 +140,10 @@ register_command(int cmd, void (*callback)(int, char*))
 
 // tries to match incoming command to a registered one, executes if found
 void
-check_commands(int cmd, int data_len, char* data)
+check_commands(int cmd, int data_len, unsigned char* data)
 {
   if(cmd == _commands[cmd].cmd_num){
-    printf("Execuitng command: %d\n", cmd);
+    printf("Executing command: %d\n", cmd);
     _commands[cmd].callback(data_len, data);
   } 
 }
@@ -155,7 +154,7 @@ void
 run_command_loop()
 {
   int cmd, data_len;
-  char data[CMD_MAX_BUF_SIZE];
+  unsigned char data[CMD_MAX_BUF_SIZE];
 
   // read in operation
   if (sgxbridge_fetch_operation(&cmd, &data_len, data)) {
@@ -163,22 +162,22 @@ run_command_loop()
     // DEBUG
     // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
     // printf("cmd:\n");
-    // print_hex(cmd, cmd_len);
+    // print_hex((unsigned char *) cmd, cmd_len);
     // printf("data:\n");
-    // print_hex(data, data_len);
+    // print_hex((unsigned char *) data, data_len);
 
     check_commands(cmd, data_len, data);
   } else {
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes
-    puts("empty\n");
+    //puts("empty\n");
   }
 }
 
 /* ========================= Command callbacks ============================= */
 
 void
-cmd_sess_id(int data_len, char* data)
+cmd_sess_id(int data_len, unsigned char* data)
 {
   // TODO: store the old object somewhere here?
 
@@ -191,9 +190,9 @@ cmd_sess_id(int data_len, char* data)
     memcpy(s->session->session_id, data, data_len);
     s->session->session_id_length = data_len;
   
-    // DOEBUG
+    // DEBUG
     puts("session_id:\n");
-    print_hex(s->session->session_id, data_len);
+    print_hex((unsigned char *) s->session->session_id, data_len);
   }
   else {
     // TODO: generate session id ourselves?
@@ -201,48 +200,42 @@ cmd_sess_id(int data_len, char* data)
 }
 
 void
-cmd_clnt_rand(int data_len, char* data)
+cmd_clnt_rand(int data_len, unsigned char* data)
 {
   // TODO: check on data_len?
   memcpy(session_ctrl.client_random, data, SSL3_RANDOM_SIZE);
 
-  // DOEBUG
+  // DEBUG
   puts("client random:\n");
-  // print_hex(session_ctrl.client_random, data_len);
   print_hex(session_ctrl.client_random, data_len);
 }
 
 void
-cmd_srv_rand(int data_len, char* data)
+cmd_srv_rand(int data_len, unsigned char* data)
 {
-  int i, random_len = *((int *)data);
-
-  // TODO: check on data len
-  arc4random_buf(session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  memcpy(session_ctrl.server_random, data, data_len);
 
   // DEBUG
   puts("server random:\n");
-  print_hex((unsigned char*) session_ctrl.server_random, random_len);
-
-  // Send the result
-  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
+  print_hex(session_ctrl.server_random, data_len);
 }
 
 void
-cmd_premaster(int data_len, char* data)
+cmd_premaster(int data_len, unsigned char* data)
 {
   // decrypt premaster secret (TODO: need to do anyt with i?)
-	session_ctrl.premaster_secret_length =
-    RSA_private_decrypt(data_len, (unsigned char*)data,
-                        session_ctrl.premaster_secret, rsa, RSA_PKCS1_PADDING);
+  session_ctrl.premaster_secret_length =
+    RSA_private_decrypt(data_len,
+        data, session_ctrl.premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
   puts("decrypted premaster secret:\n");
-  print_hex(session_ctrl.premaster_secret, session_ctrl.premaster_secret_length);
+  print_hex(session_ctrl.premaster_secret,
+      session_ctrl.premaster_secret_length);
 }
 
 void
-cmd_master_sec(int data_len, char* data)
+cmd_master_sec(int data_len, unsigned char* data)
 {
   int ret;
   long *algo2 = (long *) data;
@@ -263,16 +256,17 @@ cmd_master_sec(int data_len, char* data)
   fprintf(stdout, "\n");
 
   if(s != NULL){
-	  SSL_free(s);
-	  s = NULL;
+    SSL_free(s);
+    s = NULL;
   }
 }
+
 void
-cmd_rsa_sign(int data_len, char* data)
+cmd_rsa_sign(int data_len, unsigned char* data)
 {
-  char* md_buf = data;
-  char signature[512];
-  int sig_size = 0;
+  unsigned char* md_buf = (unsigned char *) data;
+  unsigned char signature[512];
+  unsigned int sig_size = 0;
 
   printf("\n Message Digest : len(%d) ", data_len);
 
@@ -284,14 +278,14 @@ cmd_rsa_sign(int data_len, char* data)
   printf("\n Signature : len(%d) ", sig_size);
   // print_hex(signature, sig_size);
 
-  sgxbridge_pipe_write(&sig_size, sizeof(int));
-  sgxbridge_pipe_write(signature, sig_size);
+  sgxbridge_pipe_write((unsigned char *) &sig_size, sizeof(int));
+  sgxbridge_pipe_write((unsigned char *) signature, sig_size);
 }
 
 void
-cmd_rsa_sign_sig_alg(int data_len, char* data)
+cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 {
-  char* md_buf = data;
+  unsigned char* md_buf = data;
   char signature[512];
   int sig_size = 0;
   EVP_MD_CTX md_ctx;
@@ -301,14 +295,14 @@ cmd_rsa_sign_sig_alg(int data_len, char* data)
   if (md == NULL)
     fprintf(stderr, "\n Retriving Digest from ctx failed \n");
 
-  fprintf(stderr, "\n Message Digest : len(%d) \n ", data_len);
+  fprintf(stdout, "\n Message Digest : len(%d) \n ", data_len);
 
 #if 0
     fflush(stdout);
     print_hex(md_buf, data_len);
 #endif
 
-  if (!tls12_get_sigandhash(signature, private_key, md)) {
+  if (!tls12_get_sigandhash((unsigned char *) signature, private_key, md)) {
     puts("Error getting sigandhash ");
   }
 
@@ -318,58 +312,60 @@ cmd_rsa_sign_sig_alg(int data_len, char* data)
   EVP_SignUpdate(&md_ctx, session_ctrl.server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
-  if (!EVP_SignFinal(&md_ctx, &signature[4], (unsigned int*)&sig_size,
-                     private_key)) {
+  if (!EVP_SignFinal(&md_ctx,
+        (unsigned char *) &signature[4],
+        (unsigned int*)&sig_size,
+        private_key))
     puts(" Failed to generate the Signature");
-  }
-  fprintf(stderr, "\n Signature generated successfully : len(%d) \n ",
-          sig_size);
+
+  fprintf(stdout, "\n Signature generated successfully : len(%d)\n", sig_size);
 
 #if 0
     fflush(stdout);
     print_hex(&signature[4], sig_size);
     fflush(stdout);
 #endif
+
   sig_size += 4; // Increment for the additional data we computed.
 
-  sgxbridge_pipe_write(&sig_size, sizeof(int));
-  sgxbridge_pipe_write(signature, sig_size);
+  sgxbridge_pipe_write((unsigned char *) &sig_size, sizeof(int));
+  sgxbridge_pipe_write((unsigned char *) signature, sig_size);
 }
 
 void
-cmd_key_block(int data_len, char *data){
+cmd_key_block(int data_len, unsigned char* data){
 
-    int ret;
-    sgxbridge_st *sgxb;
-    unsigned char *km, *tmp;
+  int ret;
+  sgxbridge_st *sgxb;
+  unsigned char *km, *tmp;
 
-    sgxb = (sgxbridge_st *) data;
-    km = malloc(sgxb->key_block_len);
-    tmp = malloc(sgxb->key_block_len);
+  sgxb = (sgxbridge_st *) data;
+  km = malloc(sgxb->key_block_len);
+  tmp = malloc(sgxb->key_block_len);
 
-    ret = tls1_PRF(sgxb->algo2,
-        TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
-        session_ctrl.server_random, SSL3_RANDOM_SIZE,
-        session_ctrl.client_random, SSL3_RANDOM_SIZE,
-        NULL, 0, NULL, 0,
-        session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
-        km, tmp, sgxb->key_block_len);
+  ret = tls1_PRF(sgxb->algo2,
+      TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
+      session_ctrl.server_random, SSL3_RANDOM_SIZE,
+      session_ctrl.client_random, SSL3_RANDOM_SIZE,
+      NULL, 0, NULL, 0,
+      session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
+      km, tmp, sgxb->key_block_len);
 
-    int i;
-    fprintf(stdout, "keyblock:\n");
-    for(i = 0; i < 136; i++)
-        fprintf(stdout, "%x", km[i]);
-    fprintf(stdout, "\n");
+  int i;
+  fprintf(stdout, "keyblock:\n");
+  for(i = 0; i < 136; i++)
+      fprintf(stdout, "%x", km[i]);
+  fprintf(stdout, "\n");
 
-    // if something went wrong, return length of 1 to indicate an error
-    sgxbridge_pipe_write((char *) km, ret ? sgxb->key_block_len : 1);
+  // if something went wrong, return length of 1 to indicate an error
+  sgxbridge_pipe_write((unsigned char *) km, ret ? sgxb->key_block_len : 1);
 
-    free(km);
-    free(tmp);
+  free(km);
+  free(tmp);
 }
 
 void
-cmd_final_finish_mac(int data_len, char *data){
+cmd_final_finish_mac(int data_len, unsigned char* data){
 
   int ret;
   sgxbridge_st *sgxb;
@@ -392,135 +388,143 @@ cmd_final_finish_mac(int data_len, char *data){
   fprintf(stdout, "\n");
 
   // if something went wrong, return length of 1 to indicate an error
-  sgxbridge_pipe_write((char *) peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
+  sgxbridge_pipe_write(peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
 }
 
-void cmd_ecdhe_get_public_param(int data_len, char* data)
+void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
 {
-	CERT *cert = ctx->cert;
-	const EC_GROUP *group;
-	BN_CTX *bn_ctx = NULL;
-	int ecdhe_params_size = 0;
-	ecdhe_params *ep = (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
+  const EC_GROUP *group;
+  BN_CTX *bn_ctx = NULL;
+  int ecdhe_params_size = 0;
+  ecdhe_params *ep = (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
 
-	int *d = (int *) data;
-	ecdh = EC_KEY_new_by_curve_name(*d);
-	if (ecdh == NULL) {
-		fprintf(stderr, " EC_KEY_new_by_curve_name() failed \n");
-		return;
-	}
+  int *d = (int *) data;
+  ecdh = EC_KEY_new_by_curve_name(*d);
+  if (ecdh == NULL) {
+    fprintf(stderr, " EC_KEY_new_by_curve_name() failed \n");
+    return;
+  }
 
-	if ((EC_KEY_get0_public_key(ecdh) == NULL)
-			|| (EC_KEY_get0_private_key(ecdh) == NULL)) {
-		/*(s->options & SSL_OP_SINGLE_ECDH_USE)) { */
-		if (!EC_KEY_generate_key(ecdh)) {
-			fprintf(stderr, "EC_KEY_generate_key () failed \n");
-			return;
-		}
-	}
+  if ((EC_KEY_get0_public_key(ecdh) == NULL)
+      || (EC_KEY_get0_private_key(ecdh) == NULL)) {
+    /*(s->options & SSL_OP_SINGLE_ECDH_USE)) { */
+    if (!EC_KEY_generate_key(ecdh)) {
+      fprintf(stderr, "EC_KEY_generate_key () failed \n");
+      return;
+    }
+  }
 
-	if ((((group = EC_KEY_get0_group(ecdh)) == NULL)
-			|| (EC_KEY_get0_public_key(ecdh) == NULL)
-			|| (EC_KEY_get0_private_key(ecdh)) == NULL)) {
-		fprintf(stderr, "EC_KEY_get0_group() failed \n");
-		return;
-	}
+  if ((((group = EC_KEY_get0_group(ecdh)) == NULL)
+        || (EC_KEY_get0_public_key(ecdh) == NULL)
+        || (EC_KEY_get0_private_key(ecdh)) == NULL)) {
+    fprintf(stderr, "EC_KEY_get0_group() failed \n");
+    return;
+  }
 
-	// For now, we only support ephemeral ECDH  keys over named (not generic) curves. For supported named curves, curve_id is non-zero.
-	if ((ep->curve_id = tls1_ec_nid2curve_id(EC_GROUP_get_curve_name(group)))
-			== 0) {
-		fprintf(stderr, "Failed to retrieve the group curve ID : \n");
-		return;
-	}
+  // For now, we only support ephemeral ECDH  keys over named (not generic)
+  // curves. For supported named curves, curve_id is non-zero.
+  if ((ep->curve_id = tls1_ec_nid2curve_id(EC_GROUP_get_curve_name(group)))
+      == 0) {
+    fprintf(stderr, "Failed to retrieve the group curve ID : \n");
+    return;
+  }
 
-	// Encode the public key.  First check the size of encoding and  allocate memory accordingly.
-	ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
-			POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
-	if (ep->encoded_length > ENCODED_POINT_LEN_MAX) {
-		fprintf(stderr, " No enough memory to hold  ENCODED_POINT!!! %d \n",
-				ep->encoded_length);
-		return;
-	}
+  // Encode the public key. First check the size of encoding and  allocate
+  // memory accordingly.
+  ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
+      POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
+  if (ep->encoded_length > ENCODED_POINT_LEN_MAX) {
+    fprintf(stderr, " No enough memory to hold  ENCODED_POINT!!! %d \n",
+        ep->encoded_length);
+    return;
+  }
 
-	bn_ctx = BN_CTX_new();
-	if ((bn_ctx == NULL)) {
-		fprintf(stderr, " BN_CTX_new Failed  \n");
-		return;
-	}
-	ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
-			POINT_CONVERSION_UNCOMPRESSED, ep->encodedPoint, ep->encoded_length,
-			bn_ctx);
-	if (ep->encoded_length == 0) {
-		fprintf(stderr, " EC_POINT_point2oct() Failed  \n");
-		return;
-	}
+  bn_ctx = BN_CTX_new();
+  if ((bn_ctx == NULL)) {
+    fprintf(stderr, " BN_CTX_new Failed  \n");
+    return;
+  }
 
-	fprintf(stderr, "Server EC public key created successfully size(%d) \n",
-			ep->encoded_length);
-	ep->rsa_public_key_size = EVP_PKEY_size(private_key);
+  ep->encoded_length = EC_POINT_point2oct(group,
+      EC_KEY_get0_public_key(ecdh),
+      POINT_CONVERSION_UNCOMPRESSED,
+      (unsigned char *) ep->encodedPoint,
+      ep->encoded_length,
+      bn_ctx);
 
-	BN_CTX_free(bn_ctx);
-	bn_ctx = NULL;
+  if (ep->encoded_length == 0) {
+    fprintf(stderr, " EC_POINT_point2oct() Failed  \n");
+    return;
+  }
 
-	ecdhe_params_size = sizeof(ecdhe_params);
+  fprintf(stderr, "Server EC public key created successfully size(%d) \n",
+      ep->encoded_length);
+  ep->rsa_public_key_size = EVP_PKEY_size(private_key);
 
-	fprintf(stderr, "Private Key %d Data Size %d \n", ep->rsa_public_key_size,
-			ecdhe_params_size);
+  BN_CTX_free(bn_ctx);
+  bn_ctx = NULL;
 
-	sgxbridge_pipe_write(&ecdhe_params_size, sizeof(int));
-	sgxbridge_pipe_write(ep, ecdhe_params_size);
-	free(ep);
+  ecdhe_params_size = sizeof(ecdhe_params);
+
+  fprintf(stderr, "Private Key %d Data Size %d \n", ep->rsa_public_key_size,
+      ecdhe_params_size);
+
+  sgxbridge_pipe_write((unsigned char *) &ecdhe_params_size, sizeof(int));
+  sgxbridge_pipe_write((unsigned char *) ep, ecdhe_params_size);
+  free(ep);
 }
 
-void cmd_ecdhe_generate_pre_master_key(int data_len, char* data)
+void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
 {
-	EVP_PKEY *clnt_pub_pkey = NULL;
-	EC_POINT *clnt_ecpoint = NULL;
-	BN_CTX *bn_ctx = NULL;
-	const EC_GROUP *group;
-	int ec_key_size;
+  EC_POINT *clnt_ecpoint = NULL;
+  BN_CTX *bn_ctx = NULL;
+  const EC_GROUP *group;
+  int ec_key_size;
 
-	group = EC_KEY_get0_group(ecdh);
-	if (group == NULL) {
-		fprintf(stderr, "EC_KEY_get0_group() failed \n");
-		return;
-	}
+  group = EC_KEY_get0_group(ecdh);
+  if (group == NULL) {
+    fprintf(stderr, "EC_KEY_get0_group() failed \n");
+    return;
+  }
 
-	// Let's get client's public key
-	if ((clnt_ecpoint = EC_POINT_new(group)) == NULL) {
-		fprintf(stderr, "EC_POINT_new() failed \n");
-		return;
-	}
+  // Let's get client's public key
+  if ((clnt_ecpoint = EC_POINT_new(group)) == NULL) {
+    fprintf(stderr, "EC_POINT_new() failed \n");
+    return;
+  }
 
-	// Get client's public key from encoded point in the ClientKeyExchange message.
-	if ((bn_ctx = BN_CTX_new()) == NULL) {
-		fprintf(stderr, "BN_CTX_new() failed \n");
-		return;
-	}
+  // Get client's public key from encoded point in the ClientKeyExchange
+  // message.
+  if ((bn_ctx = BN_CTX_new()) == NULL) {
+    fprintf(stderr, "BN_CTX_new() failed \n");
+    return;
+  }
 
-	if (EC_POINT_oct2point(group, clnt_ecpoint, data, data_len, bn_ctx) == 0) {
-		fprintf(stderr, "EC_POINT_oct2point() failed \n");
-		return;
-	}
+  if (EC_POINT_oct2point(group, clnt_ecpoint, data, data_len, bn_ctx) == 0) {
+    fprintf(stderr, "EC_POINT_oct2point() failed \n");
+    return;
+  }
 
-	ec_key_size = ECDH_size(ecdh);
-	if (ec_key_size <= 0) {
-		fprintf(stderr, "ECDH_size() failed \n");
-		return;
-	}
+  ec_key_size = ECDH_size(ecdh);
+  if (ec_key_size <= 0) {
+    fprintf(stderr, "ECDH_size() failed \n");
+    return;
+  }
 
-	session_ctrl.premaster_secret_length = ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
-	if (session_ctrl.premaster_secret_length <= 0) {
-		fprintf(stderr, "ECDH_compute_key() failed \n");
-		return;
-	}
-	fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
-			session_ctrl.premaster_secret_length);
+  session_ctrl.premaster_secret_length =
+    ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
 
-	memcpy(session_ctrl.premaster_secret, data, session_ctrl.premaster_secret_length);
+  if (session_ctrl.premaster_secret_length <= 0) {
+    fprintf(stderr, "ECDH_compute_key() failed \n");
+    return;
+  }
+  fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
+      session_ctrl.premaster_secret_length);
 
-	EC_POINT_free(clnt_ecpoint);
-	BN_CTX_free(bn_ctx);
-	EC_KEY_free(ecdh);
+  memcpy(session_ctrl.premaster_secret,
+      data, session_ctrl.premaster_secret_length);
 
+  EC_POINT_free(clnt_ecpoint);
+  BN_CTX_free(bn_ctx);
+  EC_KEY_free(ecdh);
 }

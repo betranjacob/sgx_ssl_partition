@@ -848,12 +848,15 @@ ssl3_get_client_hello(SSL *s)
 		}
 	}
 
-	#ifdef OPENSSL_WITH_SGX
+#ifdef OPENSSL_WITH_SGX
 	/* send session id to sgx TODO: session len is 0 */
-	sgxbridge_pipe_write_cmd(CMD_SESS_ID, s->session->session_id_length, (char*)s->session->session_id);
+	sgxbridge_pipe_write_cmd(CMD_SESS_ID,
+            s->session->session_id_length,
+            s->session->session_id);
+
 	/* send client random to sgx */
-	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, (char*)s->s3->client_random);
-	#endif
+	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, s->s3->client_random);
+#endif
 
 	p += j;
 
@@ -989,11 +992,14 @@ ssl3_get_client_hello(SSL *s)
 	 * SessionTicket processing to use it in key derivation.
 	 */
 
-	#ifdef OPENSSL_WITH_SGX
-	sgxbridge_generate_server_random(s->s3->server_random, SSL3_RANDOM_SIZE);
-	#else
 	arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
-	#endif
+
+#ifdef OPENSSL_WITH_SGX
+        // provision server random to enclave
+        sgxbridge_pipe_write_cmd(CMD_SRV_RAND,
+            SSL3_RANDOM_SIZE,
+            s->s3->server_random);
+#endif
 
 	if (!s->hit && s->tls_session_secret_cb) {
 		SSL_CIPHER *pref_cipher = NULL;
@@ -1280,15 +1286,21 @@ ssl3_send_server_key_exchange(SSL *s)
 			int ec_curve_id = tls1_get_shared_curve(s);
 			fprintf(stderr, " Elliptic Curve ID %d \n", ec_curve_id);
 
-			ecdhe_params *ep  = (ecdhe_params *) calloc (sizeof(ecdhe_params), 1);
+			ecdhe_params *ep =
+                          (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
+
 			unsigned char *mem_ptr = (unsigned char *)ep;
-			sgxbridge_ecdhe_get_public_param((char *)&ec_curve_id, sizeof(int), mem_ptr, &ep_public_len);
+			sgxbridge_ecdhe_get_public_param((char *) &ec_curve_id,
+                            sizeof(int), mem_ptr, &ep_public_len);
 			ep = (ecdhe_params *)mem_ptr;
 
-			fprintf(stderr, "## EP Public Key from SGX : Size [%d], curve-id [%d], EncodedPoint-Length [%d], EncodedPoint-Key-Size [%d] ## \n", ep_public_len,
-																																			    ep->curve_id,
-																																				ep->encoded_length,
-																																				ep->rsa_public_key_size);
+			fprintf(stdout, "## EP Public Key from SGX: ");
+                        fprintf(stdout, "Size [%d], curve-id [%d], ",
+                            ep_public_len, ep->curve_id);
+                        fprintf(stdout, "EncodedPoint-Length [%d], ",
+                            ep->encoded_length);
+                        fprintf(stdout, "EncodedPoint-Key-Size [%d] ##\n",
+                            ep->rsa_public_key_size);
 #if 0
 			fprintf(stderr, "Encoded Point - ");
 			for(j=0;j<ep->encoded_length; j++)
@@ -1526,10 +1538,13 @@ ssl3_send_server_key_exchange(SSL *s)
 				n += u + 2;
 			} else if (md) {
 				/* Send signature algorithm. */
-#ifdef  OPENSSL_WITH_SGX // (This part is invoked, when SSL client has extensions, eg. firefox)
+#ifdef  OPENSSL_WITH_SGX
+                                // (This part is invoked, when SSL client has
+                                // extensions, eg. firefox)
 				printf(" DH PAram - : Length(%d) \n", n);
 				sgxbridge_rsa_sign_sig_algo_ex(d, n, p, &i);
-				printf(" Signature - [%x:%x] : length(%d) => \n", p[0], p[1], i);
+				printf(" Signature - [%x:%x] : length(%d) => \n",
+                                    p[0], p[1], i);
 				p += 2;
 				i -= 4;
 #else
@@ -1728,10 +1743,8 @@ ssl3_get_client_key_exchange(SSL *s)
 		printf("Encrypted Pre-Master secret size(%d) : ", n);
 		print_hex(p, n);
 
-		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int)n, (char*)p);
-
+		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int) n, p);
 #else
-
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
 
 		printf("RSA_private_decrypt return : %d\n", i);
@@ -1889,7 +1902,9 @@ ssl3_get_client_key_exchange(SSL *s)
 		p += 1; // Increment pointer to Key data.
 		printf(" Total size - [%d], KeySize [%d] \n", n, i);
 		sgxbridge_ecdhe_generate_pre_master_key(p, i);
-		s->session->master_key_length = s->method->ssl3_enc->generate_master_secret(s, s->session->master_key, pre_master, key_size);
+		s->session->master_key_length =
+                  s->method->ssl3_enc->generate_master_secret(s,
+                      s->session->master_key, pre_master, key_size);
 #else
 
 		group = EC_KEY_get0_group(tkey); // Get group Key
