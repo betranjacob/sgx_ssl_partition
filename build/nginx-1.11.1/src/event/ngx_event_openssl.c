@@ -1138,6 +1138,15 @@ ngx_ssl_create_connection(ngx_ssl_t *ssl, ngx_connection_t *c, ngx_uint_t flags)
 
     c->ssl = sc;
 
+#ifdef NGX_WITH_SGX
+    RAND_bytes(sc->connection->sgx_session_id, SGX_SESSION_ID_LEN);
+    fprintf(stdout, "SGX sgx_session_id set: ");
+    int i;
+    for(i = 0; i < SGX_SESSION_ID_LEN; i++)
+      fprintf(stdout, "%x", sc->connection->sgx_session_id[i]);
+    fprintf(stdout, "\n");
+#endif
+
     return NGX_OK;
 }
 
