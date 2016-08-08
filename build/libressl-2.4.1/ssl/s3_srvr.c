@@ -1541,7 +1541,7 @@ ssl3_send_server_key_exchange(SSL *s)
                                 // (This part is invoked, when SSL client has
                                 // extensions, eg. firefox)
 				printf(" DH PAram - : Length(%d) \n", n);
-				sgxbridge_rsa_sign_sig_algo_ex(d, n, p, &i);
+				sgxbridge_rsa_sign_sig_algo_ex(s, d, n, p, &i);
 				printf(" Signature - [%x:%x] : length(%d) => \n",
                                     p[0], p[1], i);
 				p += 2;

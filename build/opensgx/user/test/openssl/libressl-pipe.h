@@ -19,6 +19,8 @@
 
 #include "ssl_locl.h"
 #include <openssl/sgxbridge.h>
+#include <openssl/lhash.h>
+#include <openssl/md5.h>
 
 #define PRIVATE_KEY_FILE_SIZE 1733
 #define SSL_MAX_PRE_MASTER_KEY_LENGTH 256
@@ -43,6 +45,11 @@ typedef struct
   unsigned char premaster_secret[SSL_MAX_PRE_MASTER_KEY_LENGTH];
   long algo;
 } session_ctrl_t;
+
+typedef struct
+{
+  unsigned char id[SGX_SESSION_ID_LEN];
+} SGX_SESSION;
 
 // prototypes
 void open_pipes();

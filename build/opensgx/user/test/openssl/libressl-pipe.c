@@ -1,5 +1,30 @@
 #include "libressl-pipe.h"
 
+DECLARE_LHASH_OF(SGX_SESSION);
+
+#define lh_SGX_SESSION_new() LHM_lh_new(SGX_SESSION, sgx_session)
+#define lh_SGX_SESSION_insert(lh, inst) LHM_lh_insert(SGX_SESSION, lh, inst)
+#define lh_SGX_SESSION_retrieve(lh,inst) LHM_lh_retrieve(SGX_SESSION, lh, inst)
+
+static int
+sgx_session_cmp(const SGX_SESSION *a, const SGX_SESSION *b)
+{
+  return strncmp((char *) a->id, (char *) b->id, SGX_SESSION_ID_LEN);
+}
+
+static IMPLEMENT_LHASH_COMP_FN(sgx_session, SGX_SESSION)
+
+static unsigned long
+sgx_session_hash(const SGX_SESSION *a)
+{
+  unsigned char b[SGX_SESSION_ID_LEN];
+  MD5(a->id, SGX_SESSION_ID_LEN, b);
+
+  return(b[0]|(b[1]<<8)|(b[2]<<16)|(b[3]<<24));
+}
+
+static IMPLEMENT_LHASH_HASH_FN(sgx_session, SGX_SESSION)
+
 int cmd_counter = 0;
 EVP_PKEY* private_key = NULL;
 RSA* rsa = NULL;
@@ -9,6 +34,9 @@ cmd_t _commands[MAX_COMMANDS];
 session_ctrl_t session_ctrl;
 SSL* s;
 EC_KEY *ecdh;
+
+LHASH_OF(SGX_SESSION) *sgx_sess_lh;
+SGX_SESSION *sgx_sess;
 
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
@@ -25,21 +53,27 @@ enclave_main(int argc, char** argv)
   }
 
   // initialize the ssl library
+  fprintf(stdout, "Initialising SSL library and loading error strings...");
   SSL_library_init();
   SSL_load_error_strings();
+  fprintf(stdout, "Done\n");
 
-  printf("SSL Initialised \n");
+  fprintf(stdout, "Initializing SGX SESSION lhash...");
+  if ((sgx_sess_lh = lh_SGX_SESSION_new()) == NULL)
+          sgx_exit(NULL);
+  fprintf(stdout, "Done\n");
+
   /* Load Private Key and certificate to SSL_CTX structure */
   load_pKey_and_cert_to_ssl_ctx();
 
   /* initialize the commnads */
+  fprintf(stdout, "Registering commands...");
   register_commands();
+  fprintf(stdout, "Done\n");
 
-  printf("Commands registered \n");
-
-  printf("Initializing session ctrl...\n");
+  fprintf(stdout, "Initializing session ctrl...");
   init_session();
-  printf("Session ctrl initialized\n");
+  fprintf(stdout, "Done\n");
 
   // pipe read loop:
   //   -> fetch in command_len -> command -> data_len -> data
@@ -143,13 +177,27 @@ void
 check_commands(int cmd, int data_len, unsigned char* data)
 {
   if(cmd == _commands[cmd].cmd_num){
-    printf("Executing command: %d\n", cmd);
+
+    SGX_SESSION sgx_s, *sgx_sp;
+    memcpy(sgx_s.id, data, SGX_SESSION_ID_LEN);
+
+    if((sgx_sp = lh_SGX_SESSION_retrieve(sgx_sess_lh, &sgx_s)) == NULL){
+      fprintf(stdout, "SGX session cache MISS\n");
+      sgx_sp = malloc(sizeof(SGX_SESSION));
+      memcpy(sgx_sp->id, data, SGX_SESSION_ID_LEN);
+      lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
+    } else {
+      fprintf(stdout, "SGX session cache HIT\n");
+    }
+
+    sgx_sess = sgx_sp;
 
     fprintf(stdout, "SGX session id: ");
-    print_hex(data, SGX_SESSION_ID_LEN);
+    print_hex(sgx_sess->id, SGX_SESSION_ID_LEN);
 
     data += SGX_SESSION_ID_LEN;
 
+    printf("Executing command: %d\n", cmd);
     _commands[cmd].callback(data_len, data);
   } 
 }
