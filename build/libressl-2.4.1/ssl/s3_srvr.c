@@ -850,12 +850,13 @@ ssl3_get_client_hello(SSL *s)
 
 #ifdef OPENSSL_WITH_SGX
 	/* send session id to sgx TODO: session len is 0 */
-	sgxbridge_pipe_write_cmd(CMD_SESS_ID,
+	sgxbridge_pipe_write_cmd(s, CMD_SESS_ID,
             s->session->session_id_length,
             s->session->session_id);
 
 	/* send client random to sgx */
-	sgxbridge_pipe_write_cmd(CMD_CLNT_RAND, SSL3_RANDOM_SIZE, s->s3->client_random);
+	sgxbridge_pipe_write_cmd(s, CMD_CLNT_RAND, SSL3_RANDOM_SIZE,
+            s->s3->client_random);
 #endif
 
 	p += j;
@@ -993,7 +994,7 @@ ssl3_get_client_hello(SSL *s)
 	 */
 
 #ifdef OPENSSL_WITH_SGX
-	sgxbridge_generate_server_random(s->s3->server_random, SSL3_RANDOM_SIZE);
+	sgxbridge_generate_server_random(s, s->s3->server_random, SSL3_RANDOM_SIZE);
 #else
 	arc4random_buf(s->s3->server_random, SSL3_RANDOM_SIZE);
 #endif
@@ -1287,8 +1288,9 @@ ssl3_send_server_key_exchange(SSL *s)
                           (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
 
 			unsigned char *mem_ptr = (unsigned char *)ep;
-			sgxbridge_ecdhe_get_public_param((char *) &ec_curve_id,
-                            sizeof(int), mem_ptr, &ep_public_len);
+			sgxbridge_ecdhe_get_public_param(s,
+                            (char *) &ec_curve_id, sizeof(int), mem_ptr,
+                            &ep_public_len);
 			ep = (ecdhe_params *)mem_ptr;
 
 			fprintf(stdout, "## EP Public Key from SGX: ");
@@ -1521,7 +1523,7 @@ ssl3_send_server_key_exchange(SSL *s)
 				}
 #ifdef OPENSSL_WITH_SGX
 				printf("Message Digest : Length(%d) => ", j);
-				sgxbridge_rsa_sign_md(md_buf, j, &(p[2]), &u);
+				sgxbridge_rsa_sign_md(s, md_buf, j, &(p[2]), &u);
 				printf("Signature : Length(%d) => ", u);
 #else
 				if (RSA_sign(NID_md5_sha1, md_buf, j,
@@ -1740,7 +1742,7 @@ ssl3_get_client_key_exchange(SSL *s)
 		printf("Encrypted Pre-Master secret size(%d) : ", n);
 		print_hex(p, n);
 
-		sgxbridge_pipe_write_cmd(CMD_PREMASTER, (int) n, p);
+		sgxbridge_pipe_write_cmd(s, CMD_PREMASTER, (int) n, p);
 #else
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
 
@@ -1898,7 +1900,7 @@ ssl3_get_client_key_exchange(SSL *s)
 		i = *p; // Get the Key Size.
 		p += 1; // Increment pointer to Key data.
 		printf(" Total size - [%d], KeySize [%d] \n", n, i);
-		sgxbridge_ecdhe_generate_pre_master_key(p, i);
+		sgxbridge_ecdhe_generate_pre_master_key(s, p, i);
 		s->session->master_key_length =
                   s->method->ssl3_enc->generate_master_secret(s,
                       s->session->master_key, pre_master, key_size);

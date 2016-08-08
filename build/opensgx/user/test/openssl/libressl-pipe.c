@@ -144,6 +144,12 @@ check_commands(int cmd, int data_len, unsigned char* data)
 {
   if(cmd == _commands[cmd].cmd_num){
     printf("Executing command: %d\n", cmd);
+
+    fprintf(stdout, "SGX session id: ");
+    print_hex(data, SGX_SESSION_ID_LEN);
+
+    data += SGX_SESSION_ID_LEN;
+
     _commands[cmd].callback(data_len, data);
   } 
 }

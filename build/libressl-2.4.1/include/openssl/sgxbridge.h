@@ -25,16 +25,17 @@ int opensgx_pipe_init(int flag_dir);
 int opensgx_pipe_open(char* unique_id, int is_write, int flag_dir);
 void sgxbridge_pipe_read(int len, unsigned char* data);
 void sgxbridge_pipe_write(unsigned char* data, int len);
-void sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data);
+void sgxbridge_pipe_write_cmd(SSL* s, int cmd, int len, unsigned char* data);
 void print_hex(unsigned char* buf, int len);
-void sgxbridge_generate_server_random(void* buf, int nbytes);
-int sgxbridge_get_master_secret(unsigned char* buf);
-void sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size,
-                           unsigned char* op_sig, int* sig_size);
+void sgxbridge_generate_server_random(SSL* s, void* buf, int nbytes);
+int sgxbridge_get_master_secret(SSL* s, unsigned char* buf);
+void sgxbridge_rsa_sign_md(SSL* s,unsigned char* ip_md, int md_size,
+    unsigned char* op_sig, int* sig_size);
 int sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data);
-void sgxbridge_ecdhe_get_public_param(unsigned char* curve_id, int c_size, 
-				      unsigned char* out, int* size);
-void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size);
+void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,
+    int c_size, unsigned char* out, int* size);
+void sgxbridge_ecdhe_generate_pre_master_key(SSL* s, unsigned char* client_pub,
+    int k_size);
 
 typedef struct
 {

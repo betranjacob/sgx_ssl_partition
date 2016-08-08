@@ -783,7 +783,8 @@ tls1_setup_key_block(SSL *s)
         sgxb.key_block_len = key_block_len;
         sgxb.algo2 = ssl_get_algorithm2(s);
 
-        sgxbridge_pipe_write_cmd(CMD_KEY_BLOCK,
+        sgxbridge_pipe_write_cmd(s,
+                CMD_KEY_BLOCK,
                 sizeof(sgxbridge_st),
                 (unsigned char *) &sgxb);
         sgxbridge_pipe_read(key_block_len, (char *) key_block);
@@ -1193,7 +1194,8 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
         sgxb.str_len = slen;
         memcpy(sgxb.buf, buf, (int) (q - buf));
 
-        sgxbridge_pipe_write_cmd(CMD_FINAL_FINISH_MAC,
+        sgxbridge_pipe_write_cmd(s,
+                CMD_FINAL_FINISH_MAC,
                 sizeof(sgxbridge_st),
                 (unsigned char *) &sgxb);
         sgxbridge_pipe_read(2 * EVP_MAX_MD_SIZE, (char *) out);
@@ -1311,7 +1313,8 @@ tls1_generate_master_secret(SSL *s, unsigned char *out, unsigned char *p,
 {
 #ifdef OPENSSL_WITH_SGX
         long algo2 = ssl_get_algorithm2(s);
-        sgxbridge_pipe_write_cmd(CMD_MASTER_SEC,
+        sgxbridge_pipe_write_cmd(s,
+            CMD_MASTER_SEC,
             sizeof(algo2),
             (unsigned char *) &algo2);
         s->session->master_key_length = SSL3_MASTER_SECRET_SIZE;
