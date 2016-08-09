@@ -38,17 +38,17 @@ typedef struct
 
 typedef struct
 {
+  unsigned char id[SGX_SESSION_ID_LEN];
+
   unsigned char* client_random;
   unsigned char* server_random;
   unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
   int premaster_secret_length;
   unsigned char premaster_secret[SSL_MAX_PRE_MASTER_KEY_LENGTH];
   long algo;
-} session_ctrl_t;
 
-typedef struct
-{
-  unsigned char id[SGX_SESSION_ID_LEN];
+  EC_KEY *ecdh;
+
 } SGX_SESSION;
 
 // prototypes
@@ -57,7 +57,7 @@ void load_pKey_and_cert_to_ssl_ctx();
 void register_command(int cmd, void (*callback)(int, unsigned char*));
 void register_commands();
 void check_commands(int cmd, int data_len, unsigned char* data);
-void init_session();
+void init_session(SGX_SESSION *sgx_s);
 void run_command_loop();
 
 // TODO: write a macro for commands
@@ -79,7 +79,6 @@ extern RSA* rsa;
 extern SSL_CTX* ctx;
 extern SSL_CIPHER new_cipher;
 extern cmd_t _commands[MAX_COMMANDS];
-extern session_ctrl_t session_ctrl;
 extern char priv_key_file[];
 extern char cert_file[];
 #endif

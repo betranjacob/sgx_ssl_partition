@@ -29,7 +29,7 @@ void sgxbridge_pipe_write_cmd(SSL* s, int cmd, int len, unsigned char* data);
 void print_hex(unsigned char* buf, int len);
 void sgxbridge_generate_server_random(SSL* s, void* buf, int nbytes);
 int sgxbridge_get_master_secret(SSL* s, unsigned char* buf);
-void sgxbridge_rsa_sign_md(SSL* s,unsigned char* ip_md, int md_size,
+void sgxbridge_rsa_sign_md(SSL* s, unsigned char* ip_md, int md_size,
     unsigned char* op_sig, int* sig_size);
 int sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data);
 void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,

@@ -31,9 +31,7 @@ RSA* rsa = NULL;
 SSL_CTX* ctx = NULL;
 SSL_CIPHER new_cipher;
 cmd_t _commands[MAX_COMMANDS];
-session_ctrl_t session_ctrl;
 SSL* s;
-EC_KEY *ecdh;
 
 LHASH_OF(SGX_SESSION) *sgx_sess_lh;
 SGX_SESSION *sgx_sess;
@@ -71,10 +69,6 @@ enclave_main(int argc, char** argv)
   register_commands();
   fprintf(stdout, "Done\n");
 
-  fprintf(stdout, "Initializing session ctrl...");
-  init_session();
-  fprintf(stdout, "Done\n");
-
   // pipe read loop:
   //   -> fetch in command_len -> command -> data_len -> data
   //   -> call the appriopriate command function
@@ -84,14 +78,14 @@ enclave_main(int argc, char** argv)
 }
 
 void
-init_session()
+init_session(SGX_SESSION *sgx_s)
 {
-  if((session_ctrl.server_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
+  if((sgx_s->server_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
     fprintf(stderr, "server random calloc() failed: %s\n", strerror(errno));
     sgx_exit(NULL);
   }
 
-  if((session_ctrl.client_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
+  if((sgx_s->client_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
     fprintf(stderr, "client random calloc() failed: %s\n", strerror(errno));
     sgx_exit(NULL);
   }
@@ -102,41 +96,47 @@ void
 print_session_params(SSL* s)
 {
   printf("client_random:\n");
-  print_hex(session_ctrl.client_random, SSL3_RANDOM_SIZE);
+  print_hex(sgx_sess->client_random, SSL3_RANDOM_SIZE);
   printf("server_random:\n");
-  print_hex(session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  print_hex(sgx_sess->server_random, SSL3_RANDOM_SIZE);
   printf("master_key:\n");
-  print_hex(session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE);
+  print_hex(sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE);
 }
 
 // TODO: should the ctx be a parameter? other stuff?
 void
 load_pKey_and_cert_to_ssl_ctx()
 {
+  fprintf(stdout, "Creating SSL context...");
   ctx = SSL_CTX_new(SSLv23_method());
   if (!ctx) {
     puts(" Context creation failed");
     sgx_exit(NULL);
   }
-  puts(" Context created ");
+  fprintf(stdout, "Done\n");
 
+  fprintf(stdout, "Loading SSL context Certificate...");
   /* Load the server certificate into the SSL_CTX structure */
   if (SSL_CTX_use_certificate_file(ctx, cert_file, SSL_FILETYPE_PEM) <= 0) {
-    puts(" Context certificate file failed");
+    fprintf(stderr, "Context certificate file failed\n");
     sgx_exit(NULL);
   }
-  puts(" Context certificate loaded ");
+  fprintf(stdout, "Done\n");
 
   /* Load the private-key corresponding to the server certificate */
+  fprintf(stdout, "Loading SSL context Private Key...");
   if (SSL_CTX_use_PrivateKey_file(ctx, priv_key_file, SSL_FILETYPE_PEM) <= 0) {
-    puts(" Context Private Key failed");
+    fprintf(stderr, "Context Private Key failed\n");
     sgx_exit(NULL);
   }
-  puts(" Context Private Key Loaded");
+  fprintf(stdout, "Done\n");
 
-  private_key = SSL_CTX_get_privatekey(ctx);
-  if (private_key == NULL)
-    fprintf(stderr, "\n Retriving Private Key from ctx failed \n");
+  fprintf(stdout, "Retrieving Private Key from SSL context...");
+  if((private_key = SSL_CTX_get_privatekey(ctx)) == NULL){
+    fprintf(stderr, "Retrieving Private Key from ctx failed\n");
+    sgx_exit(NULL);
+  }
+  fprintf(stdout, "Done\n");
 
   rsa = private_key->pkey.rsa;
 }
@@ -186,10 +186,16 @@ check_commands(int cmd, int data_len, unsigned char* data)
       sgx_sp = malloc(sizeof(SGX_SESSION));
       memcpy(sgx_sp->id, data, SGX_SESSION_ID_LEN);
       lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
+
+      fprintf(stdout, "Initializing SGX session...");
+      init_session(sgx_sp);
+      fprintf(stdout, "Done\n");
+
     } else {
       fprintf(stdout, "SGX session cache HIT\n");
     }
 
+    // update current mapping
     sgx_sess = sgx_sp;
 
     fprintf(stdout, "SGX session id: ");
@@ -257,11 +263,11 @@ void
 cmd_clnt_rand(int data_len, unsigned char* data)
 {
   // TODO: check on data_len?
-  memcpy(session_ctrl.client_random, data, SSL3_RANDOM_SIZE);
+  memcpy(sgx_sess->client_random, data, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("client random:\n");
-  print_hex(session_ctrl.client_random, data_len);
+  print_hex(sgx_sess->client_random, data_len);
 }
 
 void
@@ -270,28 +276,28 @@ cmd_srv_rand(int data_len, unsigned char* data)
   int random_len = *((int *)data);
 
   // TODO: check on data len
-  arc4random_buf(session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  arc4random_buf(sgx_sess->server_random, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("server random:\n");
-  print_hex(session_ctrl.server_random, random_len);
+  print_hex(sgx_sess->server_random, random_len);
 
   // Send the result
-  sgxbridge_pipe_write(session_ctrl.server_random, random_len);
+  sgxbridge_pipe_write(sgx_sess->server_random, random_len);
 }
 
 void
 cmd_premaster(int data_len, unsigned char* data)
 {
   // decrypt premaster secret (TODO: need to do anyt with i?)
-  session_ctrl.premaster_secret_length =
+  sgx_sess->premaster_secret_length =
     RSA_private_decrypt(data_len,
-        data, session_ctrl.premaster_secret, rsa, RSA_PKCS1_PADDING);
+        data, sgx_sess->premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
   puts("decrypted premaster secret:\n");
-  print_hex(session_ctrl.premaster_secret,
-      session_ctrl.premaster_secret_length);
+  print_hex(sgx_sess->premaster_secret,
+      sgx_sess->premaster_secret_length);
 }
 
 void
@@ -303,15 +309,15 @@ cmd_master_sec(int data_len, unsigned char* data)
 
   ret = tls1_PRF(*algo2,
       TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
-      session_ctrl.client_random, SSL3_RANDOM_SIZE, NULL, 0,
-      session_ctrl.server_random, SSL3_RANDOM_SIZE, NULL, 0,
-      session_ctrl.premaster_secret, session_ctrl.premaster_secret_length,
-      session_ctrl.master_key, buf, sizeof(buf));
+      sgx_sess->client_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sgx_sess->server_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sgx_sess->premaster_secret, sgx_sess->premaster_secret_length,
+      sgx_sess->master_key, buf, sizeof(buf));
 
   int i;
   fprintf(stdout, "master key:\n");
   for(i = 0; i < SSL_MAX_MASTER_KEY_LENGTH; i++){
-    fprintf(stdout, "%x", session_ctrl.master_key[i]);
+    fprintf(stdout, "%x", sgx_sess->master_key[i]);
   }
   fprintf(stdout, "\n");
 
@@ -368,8 +374,8 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 
   EVP_MD_CTX_init(&md_ctx);
   EVP_SignInit_ex(&md_ctx, md, NULL);
-  EVP_SignUpdate(&md_ctx, session_ctrl.client_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, session_ctrl.server_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, sgx_sess->client_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, sgx_sess->server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
   if (!EVP_SignFinal(&md_ctx,
@@ -405,10 +411,10 @@ cmd_key_block(int data_len, unsigned char* data){
 
   ret = tls1_PRF(sgxb->algo2,
       TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
-      session_ctrl.server_random, SSL3_RANDOM_SIZE,
-      session_ctrl.client_random, SSL3_RANDOM_SIZE,
+      sgx_sess->server_random, SSL3_RANDOM_SIZE,
+      sgx_sess->client_random, SSL3_RANDOM_SIZE,
       NULL, 0, NULL, 0,
-      session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
+      sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE,
       km, tmp, sgxb->key_block_len);
 
   int i;
@@ -438,7 +444,7 @@ cmd_final_finish_mac(int data_len, unsigned char* data){
       sgxb->str, sgxb->str_len,
       sgxb->buf, sgxb->key_block_len,
       NULL, 0, NULL, 0, NULL, 0,
-      session_ctrl.master_key, SSL3_MASTER_SECRET_SIZE,
+      sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE,
       peer_finish_md, buf2, sizeof(buf2));
 
   int i;
@@ -459,24 +465,24 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
   ecdhe_params *ep = (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
 
   int *d = (int *) data;
-  ecdh = EC_KEY_new_by_curve_name(*d);
-  if (ecdh == NULL) {
+  sgx_sess->ecdh = EC_KEY_new_by_curve_name(*d);
+  if (sgx_sess->ecdh == NULL) {
     fprintf(stderr, " EC_KEY_new_by_curve_name() failed \n");
     return;
   }
 
-  if ((EC_KEY_get0_public_key(ecdh) == NULL)
-      || (EC_KEY_get0_private_key(ecdh) == NULL)) {
+  if ((EC_KEY_get0_public_key(sgx_sess->ecdh) == NULL)
+      || (EC_KEY_get0_private_key(sgx_sess->ecdh) == NULL)) {
     /*(s->options & SSL_OP_SINGLE_ECDH_USE)) { */
-    if (!EC_KEY_generate_key(ecdh)) {
+    if (!EC_KEY_generate_key(sgx_sess->ecdh)) {
       fprintf(stderr, "EC_KEY_generate_key () failed \n");
       return;
     }
   }
 
-  if ((((group = EC_KEY_get0_group(ecdh)) == NULL)
-        || (EC_KEY_get0_public_key(ecdh) == NULL)
-        || (EC_KEY_get0_private_key(ecdh)) == NULL)) {
+  if ((((group = EC_KEY_get0_group(sgx_sess->ecdh)) == NULL)
+        || (EC_KEY_get0_public_key(sgx_sess->ecdh) == NULL)
+        || (EC_KEY_get0_private_key(sgx_sess->ecdh)) == NULL)) {
     fprintf(stderr, "EC_KEY_get0_group() failed \n");
     return;
   }
@@ -491,7 +497,8 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
 
   // Encode the public key. First check the size of encoding and  allocate
   // memory accordingly.
-  ep->encoded_length = EC_POINT_point2oct(group, EC_KEY_get0_public_key(ecdh),
+  ep->encoded_length = EC_POINT_point2oct(group,
+      EC_KEY_get0_public_key(sgx_sess->ecdh),
       POINT_CONVERSION_UNCOMPRESSED, NULL, 0, NULL);
   if (ep->encoded_length > ENCODED_POINT_LEN_MAX) {
     fprintf(stderr, " No enough memory to hold  ENCODED_POINT!!! %d \n",
@@ -506,7 +513,7 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
   }
 
   ep->encoded_length = EC_POINT_point2oct(group,
-      EC_KEY_get0_public_key(ecdh),
+      EC_KEY_get0_public_key(sgx_sess->ecdh),
       POINT_CONVERSION_UNCOMPRESSED,
       (unsigned char *) ep->encodedPoint,
       ep->encoded_length,
@@ -541,7 +548,7 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
   const EC_GROUP *group;
   int ec_key_size;
 
-  group = EC_KEY_get0_group(ecdh);
+  group = EC_KEY_get0_group(sgx_sess->ecdh);
   if (group == NULL) {
     fprintf(stderr, "EC_KEY_get0_group() failed \n");
     return;
@@ -565,26 +572,26 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
     return;
   }
 
-  ec_key_size = ECDH_size(ecdh);
+  ec_key_size = ECDH_size(sgx_sess->ecdh);
   if (ec_key_size <= 0) {
     fprintf(stderr, "ECDH_size() failed \n");
     return;
   }
 
-  session_ctrl.premaster_secret_length =
-    ECDH_compute_key(data, ec_key_size, clnt_ecpoint, ecdh, NULL);
+  sgx_sess->premaster_secret_length =
+    ECDH_compute_key(data, ec_key_size, clnt_ecpoint, sgx_sess->ecdh, NULL);
 
-  if (session_ctrl.premaster_secret_length <= 0) {
+  if (sgx_sess->premaster_secret_length <= 0) {
     fprintf(stderr, "ECDH_compute_key() failed \n");
     return;
   }
   fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
-      session_ctrl.premaster_secret_length);
+      sgx_sess->premaster_secret_length);
 
-  memcpy(session_ctrl.premaster_secret,
-      data, session_ctrl.premaster_secret_length);
+  memcpy(sgx_sess->premaster_secret,
+      data, sgx_sess->premaster_secret_length);
 
   EC_POINT_free(clnt_ecpoint);
   BN_CTX_free(bn_ctx);
-  EC_KEY_free(ecdh);
+  EC_KEY_free(sgx_sess->ecdh);
 }
