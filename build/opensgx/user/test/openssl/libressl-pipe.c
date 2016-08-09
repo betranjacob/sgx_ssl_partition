@@ -1,15 +1,14 @@
 #include "libressl-pipe.h"
 
-DECLARE_LHASH_OF(SGX_SESSION);
-
 #define lh_SGX_SESSION_new() LHM_lh_new(SGX_SESSION, sgx_session)
 #define lh_SGX_SESSION_insert(lh, inst) LHM_lh_insert(SGX_SESSION, lh, inst)
 #define lh_SGX_SESSION_retrieve(lh,inst) LHM_lh_retrieve(SGX_SESSION, lh, inst)
+#define lh_SGX_SESSION_delete(lh, inst) LHM_lh_delete(SGX_SESSION, lh, inst)
 
 static int
 sgx_session_cmp(const SGX_SESSION *a, const SGX_SESSION *b)
 {
-  return strncmp((char *) a->id, (char *) b->id, SGX_SESSION_ID_LEN);
+  return strncmp((char *) a->id, (char *) b->id, SGX_SESSION_ID_LENGTH);
 }
 
 static IMPLEMENT_LHASH_COMP_FN(sgx_session, SGX_SESSION)
@@ -17,8 +16,8 @@ static IMPLEMENT_LHASH_COMP_FN(sgx_session, SGX_SESSION)
 static unsigned long
 sgx_session_hash(const SGX_SESSION *a)
 {
-  unsigned char b[SGX_SESSION_ID_LEN];
-  MD5(a->id, SGX_SESSION_ID_LEN, b);
+  unsigned char b[SGX_SESSION_ID_LENGTH];
+  MD5(a->id, SGX_SESSION_ID_LENGTH, b);
 
   return(b[0]|(b[1]<<8)|(b[2]<<16)|(b[3]<<24));
 }
@@ -34,6 +33,7 @@ cmd_t _commands[MAX_COMMANDS];
 SSL* s;
 
 LHASH_OF(SGX_SESSION) *sgx_sess_lh;
+LHASH_OF(SGX_SESSION) *ssl_sess_lh;
 SGX_SESSION *sgx_sess;
 
 // TODO: make it uniform with the script (crt / cert)
@@ -56,8 +56,9 @@ enclave_main(int argc, char** argv)
   SSL_load_error_strings();
   fprintf(stdout, "Done\n");
 
-  fprintf(stdout, "Initializing SGX SESSION lhash...");
-  if ((sgx_sess_lh = lh_SGX_SESSION_new()) == NULL)
+  fprintf(stdout, "Initializing SGX & SSL SESSION lhash...");
+  if ((sgx_sess_lh = lh_SGX_SESSION_new()) == NULL ||
+       (ssl_sess_lh = lh_SGX_SESSION_new()) == NULL)
           sgx_exit(NULL);
   fprintf(stdout, "Done\n");
 
@@ -156,6 +157,7 @@ register_commands()
   register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
   register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
   register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
+  register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
 }
 
 // needs to be called before the command can be used
@@ -178,30 +180,47 @@ check_commands(int cmd, int data_len, unsigned char* data)
 {
   if(cmd == _commands[cmd].cmd_num){
 
-    SGX_SESSION sgx_s, *sgx_sp;
-    memcpy(sgx_s.id, data, SGX_SESSION_ID_LEN);
+    SGX_SESSION sgx_s, ssl_s, *sgx_sp;
+    memcpy(sgx_s.id, data, SGX_SESSION_ID_LENGTH);
+    memcpy(ssl_s.id, data + SGX_SESSION_ID_LENGTH, SSL3_SSL_SESSION_ID_LENGTH);
 
-    if((sgx_sp = lh_SGX_SESSION_retrieve(sgx_sess_lh, &sgx_s)) == NULL){
-      fprintf(stdout, "SGX session cache MISS\n");
-      sgx_sp = malloc(sizeof(SGX_SESSION));
-      memcpy(sgx_sp->id, data, SGX_SESSION_ID_LEN);
-      lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
+    fprintf(stdout, "SGX session id: ");
+    print_hex(sgx_s.id, SGX_SESSION_ID_LENGTH);
+    fprintf(stdout, "SSL session id: ");
+    print_hex(ssl_s.id, SSL3_SSL_SESSION_ID_LENGTH);
 
-      fprintf(stdout, "Initializing SGX session...");
-      init_session(sgx_sp);
-      fprintf(stdout, "Done\n");
+    if((sgx_sp = lh_SGX_SESSION_retrieve(ssl_sess_lh, &ssl_s)) == NULL){
+      fprintf(stdout, "SSL session cache MISS\n");
 
+      if((sgx_sp = lh_SGX_SESSION_retrieve(sgx_sess_lh, &sgx_s)) == NULL){
+        fprintf(stdout, "SGX session cache MISS\n");
+        if((sgx_sp = calloc(sizeof(SGX_SESSION), 1)) == NULL){
+          fprintf(stderr, "sgx_sp calloc() failed: %s\n", strerror(errno));
+          sgx_exit(NULL);
+        }
+        memcpy(sgx_sp->id, data, SGX_SESSION_ID_LENGTH);
+        sgx_sp->type = SGX_SESSION_TYPE;
+
+        lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
+
+        fprintf(stdout, "Initializing SGX session...");
+        init_session(sgx_sp);
+        fprintf(stdout, "Done\n");
+
+      } else {
+        fprintf(stdout, "SGX session cache HIT\n");
+      }
     } else {
-      fprintf(stdout, "SGX session cache HIT\n");
+        fprintf(stdout, "SSL session cache HIT\n");
     }
 
     // update current mapping
     sgx_sess = sgx_sp;
 
-    fprintf(stdout, "SGX session id: ");
-    print_hex(sgx_sess->id, SGX_SESSION_ID_LEN);
+    fprintf(stdout, "SGX session mapping key: ");
+    print_hex(sgx_sess->id, SGX_SESSION_ID_LENGTH);
 
-    data += SGX_SESSION_ID_LEN;
+    data += SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
 
     printf("Executing command: %d\n", cmd);
     _commands[cmd].callback(data_len, data);
@@ -594,4 +613,36 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
   EC_POINT_free(clnt_ecpoint);
   BN_CTX_free(bn_ctx);
   EC_KEY_free(sgx_sess->ecdh);
+}
+
+void
+cmd_ssl_handshake_done(int data_len, unsigned char *data)
+{
+  unsigned char sgx_session_id[SGX_SESSION_ID_LENGTH];
+  unsigned char ssl_session_id[SSL3_SSL_SESSION_ID_LENGTH];
+  unsigned char zeros[SSL3_SSL_SESSION_ID_LENGTH];
+  memset(zeros, 0, SSL3_SSL_SESSION_ID_LENGTH);
+
+  // this is way too dirty, think about it more later
+  data -= (SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH);
+
+  memcpy(sgx_session_id, data, SGX_SESSION_ID_LENGTH);
+  memcpy(ssl_session_id, data + SGX_SESSION_ID_LENGTH,
+      SSL3_SSL_SESSION_ID_LENGTH);
+
+  fprintf(stdout, "Changing mapping key to SSL session ID...");
+  lh_SGX_SESSION_delete(sgx_sess_lh, sgx_sess);
+
+  if(memcmp(ssl_session_id, zeros, SSL3_SSL_SESSION_ID_LENGTH) == 0){
+    // TLS SessionTicket not supported yet
+    fprintf(stderr, "TLS Session Ticket not supported\n");
+  } else {
+    memcpy(sgx_sess->id, data + SGX_SESSION_ID_LENGTH,
+        SSL3_SSL_SESSION_ID_LENGTH);
+    sgx_sess->type = SSL_SESSION_TYPE;
+
+    lh_SGX_SESSION_insert(ssl_sess_lh, sgx_sess);
+  }
+
+  fprintf(stdout, "Done\n");
 }

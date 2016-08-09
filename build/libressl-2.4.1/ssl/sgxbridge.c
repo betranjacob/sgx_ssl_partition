@@ -115,11 +115,14 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
   print_hex(data, len);
 
   cmd_pkt.cmd = cmd;
-  cmd_pkt.data_len = SGX_SESSION_ID_LEN + len;
+  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH + len;
 
-  memcpy(cmd_pkt.data, s->sgx_session_id, SGX_SESSION_ID_LEN);
-  memcpy(cmd_pkt.data + SGX_SESSION_ID_LEN, data,
-      CMD_MAX_BUF_SIZE - SGX_SESSION_ID_LEN);
+  memcpy(cmd_pkt.data, s->sgx_session_id, SGX_SESSION_ID_LENGTH);
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, s->session->session_id,
+      SSL3_SSL_SESSION_ID_LENGTH);
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+      data,
+      CMD_MAX_BUF_SIZE - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH);
 
   write(fd, &cmd_pkt, sizeof(cmd_pkt));
 }
@@ -165,10 +168,12 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
 
   if (read(fd, &cmd_pkt, sizeof(cmd_pkt_t)) > 0) {
     *cmd = cmd_pkt.cmd;
-    *data_len = cmd_pkt.data_len - SGX_SESSION_ID_LEN;
+    *data_len =
+      cmd_pkt.data_len - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
     printf("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
-    print_hex(data + SGX_SESSION_ID_LEN, *data_len);
+    print_hex(data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+        *data_len);
     return 1;
   }
   return 0;

@@ -994,7 +994,7 @@ void SSL_get0_alpn_selected(const SSL *ssl, const unsigned char **data,
 
 #define OPENSSL_WITH_SGX
 #ifdef OPENSSL_WITH_SGX
-#define SGX_SESSION_ID_LEN 16
+#define SGX_SESSION_ID_LENGTH SSL_MAX_SSL_SESSION_ID_LENGTH
 #endif
 
 struct ssl_st {
@@ -1220,7 +1220,7 @@ struct ssl_st {
 	                 * (i.e. not just sending a HelloRequest) */
 
 #ifdef OPENSSL_WITH_SGX
-        unsigned char sgx_session_id[SGX_SESSION_ID_LEN];
+        unsigned char sgx_session_id[SGX_SESSION_ID_LENGTH];
 #endif
 };
 

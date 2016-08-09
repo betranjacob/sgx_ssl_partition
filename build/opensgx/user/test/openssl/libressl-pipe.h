@@ -30,6 +30,9 @@
 #define RB_MODE_RD 0
 #define RB_MODE_WR 1
 
+#define SGX_SESSION_TYPE 0
+#define SSL_SESSION_TYPE 1
+
 typedef struct
 {
   void (*callback)(int, unsigned char*);
@@ -38,7 +41,8 @@ typedef struct
 
 typedef struct
 {
-  unsigned char id[SGX_SESSION_ID_LEN];
+  unsigned short int type;
+  unsigned char id[SGX_SESSION_ID_LENGTH];
 
   unsigned char* client_random;
   unsigned char* server_random;
@@ -50,6 +54,8 @@ typedef struct
   EC_KEY *ecdh;
 
 } SGX_SESSION;
+
+DECLARE_LHASH_OF(SGX_SESSION);
 
 // prototypes
 void open_pipes();
@@ -72,6 +78,7 @@ void cmd_key_block(int data_len, unsigned char *data);
 void cmd_final_finish_mac(int data_len, unsigned char *data);
 void cmd_ecdhe_get_public_param(int data_len, unsigned char* data);
 void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data);
+void cmd_ssl_handshake_done(int data_len, unsigned char* data);
 
 extern int cmd_counter;
 extern EVP_PKEY* private_key;

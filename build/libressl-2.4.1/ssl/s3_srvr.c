@@ -674,8 +674,12 @@ ssl3_accept(SSL *s)
 				if (cb != NULL)
 					cb(s, SSL_CB_HANDSHAKE_DONE, 1);
 			}
-
 			ret = 1;
+
+#ifdef OPENSSL_WITH_SGX
+                        sgxbridge_pipe_write_cmd(s,
+                            CMD_SSL_HANDSHAKE_DONE, 1, "d");
+#endif
 			goto end;
 			/* break; */
 
