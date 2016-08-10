@@ -445,7 +445,13 @@ tls1_aead_ctx_init(SSL_AEAD_CTX **aead_ctx)
 	return (1);
 }
 
-static int
+int tls1_aead_ctx_init_global(SSL_AEAD_CTX **aead_ctx)
+{
+	return tls1_aead_ctx_init(aead_ctx);
+}
+
+//static
+int
 tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
     unsigned key_len, const unsigned char *iv, unsigned iv_len)
 {
@@ -502,12 +508,13 @@ tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
 
 /*
  * tls1_change_cipher_state_cipher performs the work needed to switch cipher
- * states when using EVP_CIPHER. The argument is_read is true iff this function
+ * states when using EVP_CIPHER. The argument is_read is true if this function
  * is being called due to reading, as opposed to writing, a ChangeCipherSpec
  * message. In order to support export ciphersuites, use_client_keys indicates
  * whether the key material provided is in the "client write" direction.
  */
-static int
+//static
+int
 tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
     const unsigned char *mac_secret, unsigned int mac_secret_size,
     const unsigned char *key, unsigned int key_len, const unsigned char *iv,
@@ -780,6 +787,7 @@ tls1_setup_key_block(SSL *s)
         fprintf(stdout, "delegating key block generation to enclave \n");
 
         sgxbridge_st sgxb;
+        sgxb.s_cipher = *(s->session->cipher);
         sgxb.key_block_len = key_block_len;
         sgxb.algo2 = ssl_get_algorithm2(s);
 
@@ -938,13 +946,75 @@ tls1_enc(SSL *s, int send)
 
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
+			fprintf(stdout, "Seal - eivlen %d, out_len %d, len %d, aead->tag_len %d, nonce_used %d, len %d \n", eivlen, out_len, len, aead->tag_len,nonce_used, len);
 
-			if (!EVP_AEAD_CTX_seal(&aead->ctx,
-			    out + eivlen, &out_len, len + aead->tag_len, nonce,
-			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
+			app_data_encrypt app_data, *app_data_p;
+			app_data_p = &app_data;
+			memset(app_data_p, 0, sizeof(app_data_encrypt));
+			app_data_p->eiv_length 	= eivlen;
+			app_data_p->record_length 	= len;
+			unsigned char sgx_out[256];
+			int out_length = 0;
+			memcpy(app_data_p->ad, ad, sizeof(ad));
+			memcpy(app_data_p->data_record, rec->input, 16);
+			//my_memcpy(app_data_p->data_record+8, in+8, 8);
+
+			memcpy(app_data_p->nonce, nonce, sizeof(nonce));
+			app_data_p->nonce_used = nonce_used;
+			memcpy(app_data_p->out_data, out, len+aead->tag_len);
+
+	        fprintf(stdout, " Data to sgx : %d \n", sizeof(app_data_encrypt));
+
+	    	fprintf(stdout, " AD  len(13) ");
+	    	  for (i=0; i< 13; i++)
+	    		fprintf(stdout, " [%x]", ad[i], app_data_p->ad[i]);
+   			fprintf(stdout, " \n ");
+
+	        fprintf(stdout, " In Record Before encrypt : len(%d) ", len);
+			for (i=0; i< len; i++)
+				fprintf(stdout, " [%x]", in[i], app_data_p->data_record[i]);
+			fprintf(stdout, " \n ");
+
+			fprintf(stdout, " Out record Before encrypt : len(%d) ", len+aead->tag_len);
+			for (i=0; i< len+aead->tag_len; i++)
+				fprintf(stdout, " [%x]", out[i], app_data_p->out_data[i]);
+			fprintf(stdout, " \n ");
+
+	        fprintf(stdout, " Nonce : ", len);
+        	for (i=0; i< 16; i++)
+        		fprintf(stdout, " [%x]", nonce[i], app_data_p->nonce[i]);
+        	fprintf(stdout, " \n ");
+
+
+
+#ifdef OPENSSL_WITH_SGX
+//#if 0
+	        sgxbridge_pipe_write_cmd(CMD_ENCRYPT_RECORD, sizeof(app_data_encrypt), (unsigned char *)app_data_p);
+
+	        sgxbridge_pipe_read(sizeof(int), &out_length);
+	        sgxbridge_pipe_read(out_length, sgx_out);
+
+	        memcpy(out + eivlen, sgx_out, out_length);
+
+	        out_len = out_length;
+
+#else
+
+			if (!EVP_AEAD_CTX_seal(&aead->ctx, out + eivlen, &out_len, len + aead->tag_len, nonce, nonce_used, in + eivlen, len, ad, sizeof(ad)))
 				return -1;
+#endif
+
 			if (aead->variable_nonce_in_record)
-				out_len += aead->variable_nonce_len;
+			{
+						out_len += aead->variable_nonce_len;
+						fprintf(stdout, "variable_nonce_in_record incrementing length %d, OutLen(%d) \n", aead->variable_nonce_len, out_len);
+			}
+
+			fprintf(stdout, " Out record SGX : len(%d) ", out_len);
+			for (i=0; i< out_len; i++)
+				fprintf(stdout, "[%x] ", out[i]);
+			fprintf(stdout, " \n ");
+
 		} else {
 			/* receive */
 			size_t len = rec->length;
@@ -1006,10 +1076,13 @@ tls1_enc(SSL *s, int send)
 	}
 
 	if (send) {
+
 		if (EVP_MD_CTX_md(s->write_hash)) {
 			int n = EVP_MD_CTX_size(s->write_hash);
 			OPENSSL_assert(n >= 0);
 		}
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
 		ds = s->enc_write_ctx;
 		if (s->enc_write_ctx == NULL)
 			enc = NULL;
@@ -1044,12 +1117,42 @@ tls1_enc(SSL *s, int send)
 		else
 			enc = EVP_CIPHER_CTX_cipher(s->enc_read_ctx);
 	}
+	fprintf(stdout, " __%d__ success() ", __LINE__);
 
 	if ((s->session == NULL) || (ds == NULL) || (enc == NULL)) {
 		memmove(rec->data, rec->input, rec->length);
 		rec->input = rec->data;
 		ret = 1;
-	} else {
+	} else { // 4. This condition executed on valid write_ctx
+
+
+#if 0
+		if(send){
+		evp_ssl_record *sgx_rec = (evp_ssl_record *)malloc(sizeof(evp_ssl_record));
+
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
+		//memcpy(sgx_rec->data, rec->data, rec->length);
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
+		memcpy(sgx_rec->input, rec->input, rec->length);
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
+		memcpy(sgx_rec->seq_num, rec->seq_num, sizeof(rec->seq_num));
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
+		memcpy(sgx_rec->write_seq_num, s->s3->write_sequence, sizeof(s->s3->write_sequence));
+		fprintf(stdout, " __%d__ success() ", __LINE__);
+
+		sgx_rec->epoch = rec->epoch;
+		sgx_rec->length = rec->length;
+		sgx_rec->off = rec->off;
+		sgx_rec->type = rec->type;
+        sgxbridge_pipe_write_cmd(CMD_ENCRYPT_RECORD, sizeof(evp_ssl_record), (unsigned char *)sgx_rec);
+        free(sgx_rec);
+		}
+#endif
+
 		l = rec->length;
 		bs = EVP_CIPHER_block_size(ds->cipher);
 
@@ -1110,6 +1213,8 @@ tls1_enc(SSL *s, int send)
 		if (pad && !send)
 			rec->length -= pad;
 	}
+	fprintf(stdout, " __%d__ success() ", __LINE__);
+
 	return ret;
 }
 

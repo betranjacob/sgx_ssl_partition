@@ -16,6 +16,7 @@
 #define CMD_FINAL_FINISH_MAC		0x09
 #define CMD_GET_ECDHE_PUBLIC_PARAM 	0x0A
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
+#define CMD_ENCRYPT_RECORD    0x0C
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -50,6 +51,7 @@ typedef struct
   long algo2;
   char str[16];
   int str_len;
+  SSL_CIPHER s_cipher;
   unsigned char buf[2 * EVP_MAX_MD_SIZE];
 } sgxbridge_st;
 
@@ -59,4 +61,29 @@ typedef struct
   int data_len;
   char data[CMD_MAX_BUF_SIZE];
 } cmd_pkt_t;
+
+
+typedef struct
+{
+  unsigned char ad[13];
+  unsigned char nonce[16];
+  unsigned char out_data[256];
+  unsigned char data_record[256];
+  unsigned int nonce_used;
+  unsigned int eiv_length;
+  unsigned int record_length;
+} app_data_encrypt;
+
+
+typedef struct
+{
+  unsigned char data[256];    /* pointer to the record data */
+  unsigned char input[256];   /* where the decode bytes are */
+  unsigned char seq_num[8]; /* sequence number, needed by DTLS1 */
+  unsigned char write_seq_num[8];
+  unsigned int type;               /* type of record */
+  unsigned int length;    /* How many bytes available */
+  unsigned int off;       /* read/write offset into 'buf' */
+  unsigned long epoch;    /* epoch number, needed by DTLS1 */
+} evp_ssl_record;
 #endif /* _SGXBRIDGE_H_ */

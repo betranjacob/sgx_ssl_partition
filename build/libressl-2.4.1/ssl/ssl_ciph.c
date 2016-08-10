@@ -561,6 +561,151 @@ ssl_load_ciphers(void)
 }
 
 int
+ssl_cipher_get_evp_from_cipher(const SSL_CIPHER *cipher, const EVP_CIPHER **enc,
+    const EVP_MD **md, int *mac_pkey_type, int *mac_secret_size)
+{
+	const SSL_CIPHER *c;
+	int i;
+
+	c = cipher;
+	if (c == NULL)
+		return (0);
+
+	/*
+	 * This function does not handle EVP_AEAD.
+	 * See ssl_cipher_get_aead_evp instead.
+	 */
+	if (c->algorithm2 & SSL_CIPHER_ALGORITHM2_AEAD)
+		return(0);
+
+	if ((enc == NULL) || (md == NULL))
+		return (0);
+
+	switch (c->algorithm_enc) {
+	case SSL_DES:
+		i = SSL_ENC_DES_IDX;
+		break;
+	case SSL_3DES:
+		i = SSL_ENC_3DES_IDX;
+		break;
+	case SSL_RC4:
+		i = SSL_ENC_RC4_IDX;
+		break;
+	case SSL_IDEA:
+		i = SSL_ENC_IDEA_IDX;
+		break;
+	case SSL_eNULL:
+		i = SSL_ENC_NULL_IDX;
+		break;
+	case SSL_AES128:
+		i = SSL_ENC_AES128_IDX;
+		break;
+	case SSL_AES256:
+		i = SSL_ENC_AES256_IDX;
+		break;
+	case SSL_CAMELLIA128:
+		i = SSL_ENC_CAMELLIA128_IDX;
+		break;
+	case SSL_CAMELLIA256:
+		i = SSL_ENC_CAMELLIA256_IDX;
+		break;
+	case SSL_eGOST2814789CNT:
+		i = SSL_ENC_GOST89_IDX;
+		break;
+	case SSL_AES128GCM:
+		i = SSL_ENC_AES128GCM_IDX;
+		break;
+	case SSL_AES256GCM:
+		i = SSL_ENC_AES256GCM_IDX;
+		break;
+	default:
+		i = -1;
+		break;
+	}
+
+	if ((i < 0) || (i >= SSL_ENC_NUM_IDX))
+		*enc = NULL;
+	else {
+		if (i == SSL_ENC_NULL_IDX)
+			*enc = EVP_enc_null();
+		else
+			*enc = ssl_cipher_methods[i];
+	}
+
+	switch (c->algorithm_mac) {
+	case SSL_MD5:
+		i = SSL_MD_MD5_IDX;
+		break;
+	case SSL_SHA1:
+		i = SSL_MD_SHA1_IDX;
+		break;
+	case SSL_SHA256:
+		i = SSL_MD_SHA256_IDX;
+		break;
+	case SSL_SHA384:
+		i = SSL_MD_SHA384_IDX;
+		break;
+	case SSL_GOST94:
+		i = SSL_MD_GOST94_IDX;
+		break;
+	case SSL_GOST89MAC:
+		i = SSL_MD_GOST89MAC_IDX;
+		break;
+	case SSL_STREEBOG256:
+		i = SSL_MD_STREEBOG256_IDX;
+		break;
+	case SSL_STREEBOG512:
+		i = SSL_MD_STREEBOG512_IDX;
+		break;
+	default:
+		i = -1;
+		break;
+	}
+	if ((i < 0) || (i >= SSL_MD_NUM_IDX)) {
+		*md = NULL;
+
+		if (mac_pkey_type != NULL)
+			*mac_pkey_type = NID_undef;
+		if (mac_secret_size != NULL)
+			*mac_secret_size = 0;
+		if (c->algorithm_mac == SSL_AEAD)
+			mac_pkey_type = NULL;
+	} else {
+		*md = ssl_digest_methods[i];
+		if (mac_pkey_type != NULL)
+			*mac_pkey_type = ssl_mac_pkey_id[i];
+		if (mac_secret_size != NULL)
+			*mac_secret_size = ssl_mac_secret_size[i];
+	}
+
+	if ((*enc != NULL) &&
+	    (*md != NULL || (EVP_CIPHER_flags(*enc)&EVP_CIPH_FLAG_AEAD_CIPHER)) &&
+	    (!mac_pkey_type || *mac_pkey_type != NID_undef)) {
+		const EVP_CIPHER *evp;
+#if 0
+		if (s->ssl_version >> 8 != TLS1_VERSION_MAJOR ||
+		    s->ssl_version < TLS1_VERSION)
+			return 1;
+#endif
+		if (c->algorithm_enc == SSL_RC4 &&
+		    c->algorithm_mac == SSL_MD5 &&
+		    (evp = EVP_get_cipherbyname("RC4-HMAC-MD5")))
+			*enc = evp, *md = NULL;
+		else if (c->algorithm_enc == SSL_AES128 &&
+		    c->algorithm_mac == SSL_SHA1 &&
+		    (evp = EVP_get_cipherbyname("AES-128-CBC-HMAC-SHA1")))
+			*enc = evp, *md = NULL;
+		else if (c->algorithm_enc == SSL_AES256 &&
+		    c->algorithm_mac == SSL_SHA1 &&
+		    (evp = EVP_get_cipherbyname("AES-256-CBC-HMAC-SHA1")))
+			*enc = evp, *md = NULL;
+		return (1);
+	} else
+		return (0);
+}
+
+
+int
 ssl_cipher_get_evp(const SSL_SESSION *s, const EVP_CIPHER **enc,
     const EVP_MD **md, int *mac_pkey_type, int *mac_secret_size)
 {
@@ -702,6 +847,45 @@ ssl_cipher_get_evp(const SSL_SESSION *s, const EVP_CIPHER **enc,
 		return (1);
 	} else
 		return (0);
+}
+
+/*
+ * ssl_cipher_get_evp_aead sets aead to point to the correct EVP_AEAD object
+ * for s->cipher. It returns 1 on success and 0 on error.
+ */
+int
+ssl_cipher_get_evp_aead_from_cipher(const SSL_CIPHER *cipher, const EVP_AEAD **aead)
+{
+	const SSL_CIPHER *c = cipher;
+
+	*aead = NULL;
+
+	if (c == NULL)
+		return 0;
+	if ((c->algorithm2 & SSL_CIPHER_ALGORITHM2_AEAD) == 0)
+		return 0;
+
+	switch (c->algorithm_enc) {
+#ifndef OPENSSL_NO_AES
+	case SSL_AES128GCM:
+		*aead = EVP_aead_aes_128_gcm();
+		return 1;
+	case SSL_AES256GCM:
+		*aead = EVP_aead_aes_256_gcm();
+		return 1;
+#endif
+#if !defined(OPENSSL_NO_CHACHA) && !defined(OPENSSL_NO_POLY1305)
+	case SSL_CHACHA20POLY1305:
+		*aead = EVP_aead_chacha20_poly1305();
+		return 1;
+	case SSL_CHACHA20POLY1305_OLD:
+		*aead = EVP_aead_chacha20_poly1305_old();
+		return 1;
+#endif
+	default:
+		break;
+	}
+	return 0;
 }
 
 /*

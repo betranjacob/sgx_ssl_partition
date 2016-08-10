@@ -115,7 +115,7 @@ sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data)
   print_hex(data, len);
   cmd_pkt.cmd = cmd;
   cmd_pkt.data_len = len;
-  memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
+  memcpy(cmd_pkt.data, data, len);
   write(fd, &cmd_pkt, sizeof(cmd_pkt));
 }
 

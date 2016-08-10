@@ -578,6 +578,10 @@ STACK_OF(SSL_CIPHER) *ssl_create_cipher_list(const SSL_METHOD *meth,
 void ssl_update_cache(SSL *s, int mode);
 int ssl_cipher_get_evp(const SSL_SESSION *s, const EVP_CIPHER **enc,
     const EVP_MD **md, int *mac_pkey_type, int *mac_secret_size);
+
+int ssl_cipher_get_evp_from_cipher(const SSL_CIPHER *cipher, const EVP_CIPHER **enc,
+    const EVP_MD **md, int *mac_pkey_type, int *mac_secret_size);
+
 int ssl_cipher_get_evp_aead(const SSL_SESSION *s, const EVP_AEAD **aead);
 int ssl_get_handshake_digest(int i, long *mask, const EVP_MD **md);
 
