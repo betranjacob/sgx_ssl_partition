@@ -158,6 +158,7 @@ register_commands()
   register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
   register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
   register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
+  register_command(CMD_SSL_SESSION_REMOVE, cmd_ssl_session_remove);
 }
 
 // needs to be called before the command can be used
@@ -643,6 +644,19 @@ cmd_ssl_handshake_done(int data_len, unsigned char *data)
 
     lh_SGX_SESSION_insert(ssl_sess_lh, sgx_sess);
   }
+
+  fprintf(stdout, "Done\n");
+}
+
+void
+cmd_ssl_session_remove(int data_len, unsigned char *data)
+{
+  fprintf(stdout, "Removing SSL session from cache...");
+  lh_SGX_SESSION_delete(ssl_sess_lh, sgx_sess);
+
+  free(sgx_sess->client_random);
+  free(sgx_sess->server_random);
+  free(sgx_sess);
 
   fprintf(stdout, "Done\n");
 }

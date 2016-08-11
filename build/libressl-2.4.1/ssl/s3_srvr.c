@@ -164,14 +164,14 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 
+#ifdef OPENSSL_WITH_SGX
 #include <openssl/sgxbridge.h>
+#endif
 
 #include "bytestring.h"
 
 #define ENTER() fprintf(stderr, "%s >>Enter>> %s() \n", __FILE__, __func__);
 #define EXIT() fprintf(stderr, "%s <<Exit<< %s() \n\n", __FILE__, __func__);
-
-#define OPENSSL_WITH_SGX
 
 int
 ssl3_accept(SSL *s)
@@ -605,6 +605,7 @@ ssl3_accept(SSL *s)
 		case SSL3_ST_SW_CHANGE_B:
 
 			s->session->cipher = s->s3->tmp.new_cipher;
+
 			if (!s->method->ssl3_enc->setup_key_block(s)) {
 				ret = -1;
 				goto end;
@@ -1160,6 +1161,7 @@ ssl3_send_server_hello(SSL *s)
 			return (-1);
 		}
 		*(p++) = sl;
+
 		memcpy(p, s->session->session_id, sl);
 		p += sl;
 

@@ -127,6 +127,20 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
   write(fd, &cmd_pkt, sizeof(cmd_pkt));
 }
 
+void
+sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
+{
+  cmd_pkt_t cmd_pkt;
+
+  cmd_pkt.cmd = CMD_SSL_SESSION_REMOVE;
+  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
+
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, session_id,
+      SSL3_SSL_SESSION_ID_LENGTH);
+
+  write(fd_ssl_sgx, &cmd_pkt, sizeof(cmd_pkt));
+}
+
 int
 sgxbridge_init()
 {

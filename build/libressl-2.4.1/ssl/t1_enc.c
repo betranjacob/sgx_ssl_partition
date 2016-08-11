@@ -143,9 +143,9 @@
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 
+#ifdef OPENSSL_WITH_SGX
 #include <openssl/sgxbridge.h>
-
-#define OPENSSL_WITH_SGX
+#endif
 
 void
 tls1_cleanup_key_block(SSL *s)

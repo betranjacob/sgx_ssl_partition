@@ -16,6 +16,7 @@
 #define CMD_FINAL_FINISH_MAC		0x09
 #define CMD_GET_ECDHE_PUBLIC_PARAM 	0x0A
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
+#define CMD_SSL_SESSION_REMOVE   	0x0D
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -26,6 +27,7 @@ int opensgx_pipe_open(char* unique_id, int is_write, int flag_dir);
 void sgxbridge_pipe_read(int len, unsigned char* data);
 void sgxbridge_pipe_write(unsigned char* data, int len);
 void sgxbridge_pipe_write_cmd(SSL* s, int cmd, int len, unsigned char* data);
+void sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id);
 void print_hex(unsigned char* buf, int len);
 void sgxbridge_generate_server_random(SSL* s, void* buf, int nbytes);
 int sgxbridge_get_master_secret(SSL* s, unsigned char* buf);

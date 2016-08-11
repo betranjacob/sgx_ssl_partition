@@ -992,7 +992,6 @@ void SSL_get0_alpn_selected(const SSL *ssl, const unsigned char **data,
 
 #ifndef OPENSSL_NO_SSL_INTERN
 
-#define OPENSSL_WITH_SGX
 #ifdef OPENSSL_WITH_SGX
 #define SGX_SESSION_ID_LENGTH SSL_MAX_SSL_SESSION_ID_LENGTH
 #endif
