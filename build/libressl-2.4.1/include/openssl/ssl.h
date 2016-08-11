@@ -992,6 +992,10 @@ void SSL_get0_alpn_selected(const SSL *ssl, const unsigned char **data,
 
 #ifndef OPENSSL_NO_SSL_INTERN
 
+#ifdef OPENSSL_WITH_SGX
+#define SGX_SESSION_ID_LENGTH SSL_MAX_SSL_SESSION_ID_LENGTH
+#endif
+
 struct ssl_st {
 	/* protocol version
 	 * (one of SSL2_VERSION, SSL3_VERSION, TLS1_VERSION, DTLS1_VERSION)
@@ -1214,6 +1218,9 @@ struct ssl_st {
 		 	 * 2 if we are a server and are inside a handshake
 	                 * (i.e. not just sending a HelloRequest) */
 
+#ifdef OPENSSL_WITH_SGX
+        unsigned char sgx_session_id[SGX_SESSION_ID_LENGTH];
+#endif
 };
 
 #endif

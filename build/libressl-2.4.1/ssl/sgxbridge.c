@@ -103,7 +103,7 @@ sgxbridge_pipe_write(unsigned char* data, int len)
 }
 
 void
-sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data)
+sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
 {
   int fd = fd_ssl_sgx;
   cmd_pkt_t cmd_pkt;
@@ -113,10 +113,32 @@ sgxbridge_pipe_write_cmd(int cmd, int len, unsigned char* data)
 
   printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
   print_hex(data, len);
+
   cmd_pkt.cmd = cmd;
-  cmd_pkt.data_len = len;
-  memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
+  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH + len;
+
+  memcpy(cmd_pkt.data, s->sgx_session_id, SGX_SESSION_ID_LENGTH);
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, s->session->session_id,
+      SSL3_SSL_SESSION_ID_LENGTH);
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+      data,
+      CMD_MAX_BUF_SIZE - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH);
+
   write(fd, &cmd_pkt, sizeof(cmd_pkt));
+}
+
+void
+sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
+{
+  cmd_pkt_t cmd_pkt;
+
+  cmd_pkt.cmd = CMD_SSL_SESSION_REMOVE;
+  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
+
+  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, session_id,
+      SSL3_SSL_SESSION_ID_LENGTH);
+
+  write(fd_ssl_sgx, &cmd_pkt, sizeof(cmd_pkt));
 }
 
 int
@@ -160,10 +182,12 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
 
   if (read(fd, &cmd_pkt, sizeof(cmd_pkt_t)) > 0) {
     *cmd = cmd_pkt.cmd;
-    *data_len = cmd_pkt.data_len;
+    *data_len =
+      cmd_pkt.data_len - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
     printf("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
-    print_hex(data, *data_len);
+    print_hex(data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+        *data_len);
     return 1;
   }
   return 0;
@@ -181,11 +205,12 @@ print_hex(unsigned char* buf, int len)
 }
 
 void
-sgxbridge_generate_server_random(void* buf, int nbytes)
+sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 {
   printf("generate_server_random\n");
 
-  sgxbridge_pipe_write_cmd(CMD_SRV_RAND,
+  sgxbridge_pipe_write_cmd(s,
+      CMD_SRV_RAND,
       sizeof(int),
       (unsigned char *) &nbytes);
 
@@ -196,46 +221,56 @@ sgxbridge_generate_server_random(void* buf, int nbytes)
 }
 
 int
-sgxbridge_get_master_secret(unsigned char* buf)
+sgxbridge_get_master_secret(SSL *s, unsigned char* buf)
 {
-  sgxbridge_pipe_write_cmd(CMD_MASTER_SEC, 1, "m");
+  sgxbridge_pipe_write_cmd(s, CMD_MASTER_SEC, 1, "m");
 
   return SSL3_MASTER_SECRET_SIZE;
 }
 
 void
-sgxbridge_rsa_sign_md(unsigned char* ip_md, int md_size, unsigned char* op_sig,
-                      int* sig_size)
+sgxbridge_rsa_sign_md(SSL *s,
+    unsigned char* ip_md,
+    int md_size,
+    unsigned char* op_sig,
+    int* sig_size)
 {
-  sgxbridge_pipe_write_cmd(CMD_RSA_SIGN, md_size, ip_md);
+  sgxbridge_pipe_write_cmd(s, CMD_RSA_SIGN, md_size, ip_md);
 
   read(fd_sgx_ssl, sig_size, sizeof(int));
   read(fd_sgx_ssl, op_sig, *sig_size);
 }
 
 void
-sgxbridge_rsa_sign_sig_algo_ex(unsigned char* ip_md, int md_size,
-                               unsigned char* op_sig, int* sig_size)
+sgxbridge_rsa_sign_sig_algo_ex(SSL *s,
+    unsigned char* ip_md,
+    int md_size,
+    unsigned char* op_sig,
+    int* sig_size)
 {
-  sgxbridge_pipe_write_cmd(CMD_RSA_SIGN_SIG_ALG, md_size, ip_md);
+  sgxbridge_pipe_write_cmd(s, CMD_RSA_SIGN_SIG_ALG, md_size, ip_md);
 
   read(fd_sgx_ssl, sig_size, sizeof(int));
   read(fd_sgx_ssl, op_sig, *sig_size);
 }
 
 
-void sgxbridge_ecdhe_get_public_param(unsigned char* curve_id, int c_size,
-				      unsigned char* out, int* size)
+void sgxbridge_ecdhe_get_public_param(SSL *s,
+    unsigned char* curve_id,
+    int c_size,
+    unsigned char* out,
+    int* size)
 {
-    sgxbridge_pipe_write_cmd(CMD_GET_ECDHE_PUBLIC_PARAM, c_size, curve_id);
+    sgxbridge_pipe_write_cmd(s, CMD_GET_ECDHE_PUBLIC_PARAM, c_size, curve_id);
 
     read(fd_sgx_ssl, size, sizeof(int));
     read(fd_sgx_ssl, out, *size);
 }
 
-void sgxbridge_ecdhe_generate_pre_master_key(unsigned char* client_pub, int k_size)
-					 //unsigned char* out, int* size)
+void sgxbridge_ecdhe_generate_pre_master_key(SSL *s,
+    unsigned char* client_pub,
+    int k_size)
 {
-    sgxbridge_pipe_write_cmd(CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
+    sgxbridge_pipe_write_cmd(s, CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
 
 }
