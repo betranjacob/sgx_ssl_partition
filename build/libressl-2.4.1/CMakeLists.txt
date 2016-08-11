@@ -25,6 +25,7 @@ string(REGEX REPLACE "\\..*" "" TLS_MAJOR_VERSION ${TLS_VERSION})
 
 option(ENABLE_ASM "Enable assembly" ON)
 option(ENABLE_EXTRATESTS "Enable extra tests that may be unreliable on some platforms" OFF)
+option(ENABLE_SGX "Load SSL private key and secrets within an enclave" OFF)
 option(ENABLE_NC "Enable installing TLS-enabled nc(1)" OFF)
 set(OPENSSLDIR ${OPENSSLDIR} CACHE PATH "Set the default openssl directory" FORCE)
 
@@ -243,6 +244,11 @@ if(SIZEOF_TIME_T STREQUAL "4")
 	message(WARNING " ** Warning, this system is unable to represent times past 2038\n"
 	                " ** It will behave incorrectly when handling valid RFC5280 dates")
 endif()
+
+if(ENABLE_SGX)
+        add_definitions(-DOPENSSL_WITH_SGX)
+endif()
+
 add_definitions(-DSIZEOF_TIME_T=${SIZEOF_TIME_T})
 
 add_subdirectory(crypto)

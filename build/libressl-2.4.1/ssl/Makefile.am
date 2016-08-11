@@ -1,5 +1,9 @@
 include $(top_srcdir)/Makefile.am.common
 
+if OPENSSL_WITH_SGX
+  AM_CPPFLAGS += -DOPENSSL_WITH_SGX
+endif
+
 lib_LTLIBRARIES = libssl.la
 
 EXTRA_DIST = VERSION

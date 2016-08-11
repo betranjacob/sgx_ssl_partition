@@ -67,9 +67,10 @@ build_nginx() {
 
 	mkdir -p $BPATH/nginx
 	./configure  --with-openssl=$STATICLIBSSL \
+        --with-openssl-opt='--enable-sgx --prefix=${STATICLIBSSL}/.openssl' \
 	--with-debug \
 	--with-ld-opt="-lrt"  \
-	--with-cc-opt='-O0 -g' \
+	--with-cc-opt='-O0 -g -DOPENSSL_WITH_SGX' \
 	--sbin-path=/usr/sbin/nginx \
 	--conf-path=/etc/nginx/nginx.conf \
 	--error-log-path=$NGINX_LOG_DIR/error.log \

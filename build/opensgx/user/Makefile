@@ -17,7 +17,7 @@ LIBSSLDIR = $(LIBRESSLDIR)
 # OpenSSL Cases
 #OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/openssl/include
 # uncomment for libressl TODO: need to compile for qemu ;/
-OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/libressl/include
+OPENSSL_CFLAGS = $(SGX_CFLAGS) -I$(LIBSGXDIR)/libressl/include -DOPENSSL_WITH_SGX
 
 #OPENSSL_LIBS = $(LIBSGXDIR)/sgx-entry.o $(LIBSGXDIR)/libssl.a \
 #               $(LIBSGXDIR)/libcrypto.a $(LIBSGXDIR)/libsgx.a \
