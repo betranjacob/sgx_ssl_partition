@@ -774,7 +774,6 @@ ngx_ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
 static void
 ngx_ssl_info_callback(const ngx_ssl_conn_t *ssl_conn, int where, int ret)
 {
-    printf("ngx_ssl_info_callback\n");
     BIO               *rbio, *wbio;
     ngx_connection_t  *c;
 

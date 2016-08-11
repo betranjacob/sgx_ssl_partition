@@ -28,9 +28,7 @@ int cmd_counter = 0;
 EVP_PKEY* private_key = NULL;
 RSA* rsa = NULL;
 SSL_CTX* ctx = NULL;
-SSL_CIPHER new_cipher;
 cmd_t _commands[MAX_COMMANDS];
-SSL* s;
 
 LHASH_OF(SGX_SESSION) *sgx_sess_lh;
 LHASH_OF(SGX_SESSION) *ssl_sess_lh;
@@ -146,7 +144,6 @@ load_pKey_and_cert_to_ssl_ctx()
 void
 register_commands()
 {
-  register_command(CMD_SESS_ID, cmd_sess_id);
   register_command(CMD_CLNT_RAND, cmd_clnt_rand);
   register_command(CMD_SRV_RAND, cmd_srv_rand);
   register_command(CMD_PREMASTER, cmd_premaster);
@@ -257,29 +254,6 @@ run_command_loop()
 /* ========================= Command callbacks ============================= */
 
 void
-cmd_sess_id(int data_len, unsigned char* data)
-{
-  // TODO: store the old object somewhere here?
-
-  s = SSL_new(ctx);
-  ssl_get_new_session(s, 1);           // creates new session object
-  s->s3->tmp.new_cipher = &new_cipher; // TODO: find function equivalent
-  // set the session id
-
-  if(data_len > 0) {
-    memcpy(s->session->session_id, data, data_len);
-    s->session->session_id_length = data_len;
-  
-    // DEBUG
-    puts("session_id:\n");
-    print_hex(s->session->session_id, data_len);
-  }
-  else {
-    // TODO: generate session id ourselves?
-  }
-}
-
-void
 cmd_clnt_rand(int data_len, unsigned char* data)
 {
   // TODO: check on data_len?
@@ -340,11 +314,6 @@ cmd_master_sec(int data_len, unsigned char* data)
     fprintf(stdout, "%x", sgx_sess->master_key[i]);
   }
   fprintf(stdout, "\n");
-
-  if(s != NULL){
-    SSL_free(s);
-    s = NULL;
-  }
 }
 
 void

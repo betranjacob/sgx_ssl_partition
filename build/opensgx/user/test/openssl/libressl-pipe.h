@@ -67,7 +67,6 @@ void init_session(SGX_SESSION *sgx_s);
 void run_command_loop();
 
 // TODO: write a macro for commands
-void cmd_sess_id(int data_len, unsigned char* data);
 void cmd_clnt_rand(int data_len, unsigned char* data);
 void cmd_srv_rand(int data_len, unsigned char* data);
 void cmd_premaster(int data_len, unsigned char* data);
@@ -85,7 +84,6 @@ extern int cmd_counter;
 extern EVP_PKEY* private_key;
 extern RSA* rsa;
 extern SSL_CTX* ctx;
-extern SSL_CIPHER new_cipher;
 extern cmd_t _commands[MAX_COMMANDS];
 extern char priv_key_file[];
 extern char cert_file[];

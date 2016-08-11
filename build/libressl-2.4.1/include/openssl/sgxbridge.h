@@ -5,7 +5,6 @@
 
 #define CMD_MAX_BUF_SIZE 1024
 
-#define CMD_SESS_ID 			0x00
 #define CMD_CLNT_RAND 			0x01
 #define CMD_SRV_RAND 			0x02
 #define CMD_PREMASTER 			0x03
