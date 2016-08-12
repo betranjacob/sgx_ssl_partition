@@ -123,6 +123,8 @@ register_commands()
   register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
   register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
   register_command(CMD_ENCRYPT_RECORD, cmd_encrypt_record);
+  register_command(CMD_DECRYPT_RECORD, cmd_decrypt_record);
+
 }
 
 // needs to be called before the command can be used
@@ -241,6 +243,7 @@ cmd_premaster(int data_len, unsigned char* data)
       session_ctrl.premaster_secret_length);
 }
 
+
 void
 cmd_master_sec(int data_len, unsigned char* data)
 {
@@ -341,6 +344,108 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
   sgxbridge_pipe_write((unsigned char *) signature, sig_size);
 }
 
+void init_ctx_and_load_keys(char use_client_keys, char is_read) {
+
+	int mac_type = NID_undef, mac_secret_size = 0;
+	int key_block_len = 0, key_len = 0, iv_len = 0;
+	const EVP_MD *mac = NULL;
+	unsigned char *key_block, *seq;
+	const EVP_CIPHER *cipher;
+	const EVP_AEAD *aead;
+
+	const unsigned char *client_write_mac_secret, *server_write_mac_secret;
+	const unsigned char *client_write_key, *server_write_key;
+	const unsigned char *client_write_iv, *server_write_iv;
+	const unsigned char *mac_secret, *key, *iv;
+
+	fprintf(stdout, " __%d__ Success() \n", __LINE__);
+
+	cipher = s->s3->tmp.new_sym_enc; // Populated from setup-key-block
+	aead = s->s3->tmp.new_aead;
+
+	/*
+	 * Reset sequence number to zero - for DTLS this is handled in
+	 * dtls1_reset_seq_numbers().
+	 */
+	if (!SSL_IS_DTLS(s)) {
+		seq = is_read ? s->s3->read_sequence : s->s3->write_sequence;
+		memset(seq, 0, SSL3_SEQUENCE_SIZE);
+		fprintf(stdout, " Reset sequence number to zero - Success() \n");
+
+	}
+
+	if (aead != NULL) {
+		key_len = EVP_AEAD_key_length(aead);
+		iv_len = SSL_CIPHER_AEAD_FIXED_NONCE_LEN(s->s3->tmp.new_cipher);
+	} else {
+		key_len = EVP_CIPHER_key_length(cipher);
+		iv_len = EVP_CIPHER_iv_length(cipher);
+
+		/* If GCM mode only part of IV comes from PRF. */
+		if (EVP_CIPHER_mode(cipher) == EVP_CIPH_GCM_MODE)
+			iv_len = EVP_GCM_TLS_FIXED_IV_LEN;
+	}
+
+	mac_secret_size = s->s3->tmp.new_mac_secret_size;
+	key_block = s->s3->tmp.key_block;
+	client_write_mac_secret = key_block;
+	key_block += mac_secret_size;
+	server_write_mac_secret = key_block;
+	key_block += mac_secret_size;
+	client_write_key = key_block;
+	key_block += key_len;
+	server_write_key = key_block;
+	key_block += key_len;
+	client_write_iv = key_block;
+	key_block += iv_len;
+	server_write_iv = key_block;
+	key_block += iv_len;
+
+	if (use_client_keys) {
+		mac_secret = client_write_mac_secret;
+		key = client_write_key;
+		iv = client_write_iv;
+	} else {
+		mac_secret = server_write_mac_secret;
+		key = server_write_key;
+		iv = server_write_iv;
+	}
+
+	if (key_block - s->s3->tmp.key_block != s->s3->tmp.key_block_length) {
+		fprintf(stdout,
+				" Incorrect block length calculation () failed block_length::%d \n",
+				s->s3->tmp.key_block_length);
+		fprintf(stdout,
+				"mac_secret_size::%d, key_len::%d, iv_length::%d  key_block length::%d\n",
+				mac_secret_size, key_len, iv_len, s->s3->tmp.key_block_length);
+		exit(1);
+	}
+
+	if (is_read) {
+		memcpy(s->s3->read_mac_secret, mac_secret, mac_secret_size);
+		s->s3->read_mac_secret_size = mac_secret_size;
+	} else {
+		memcpy(s->s3->write_mac_secret, mac_secret, mac_secret_size);
+		s->s3->write_mac_secret_size = mac_secret_size;
+	}
+
+	if (s->s3->tmp.new_aead != NULL) {
+		if (!tls1_change_cipher_state_aead(s, is_read, key, key_len, iv,
+				iv_len)) {
+			fprintf(stdout, "tls1_change_cipher_state_aead() failed \n",
+					__LINE__);
+			exit(1);
+		}
+	} else {
+		if (!tls1_change_cipher_state_cipher(s, is_read, use_client_keys,
+				mac_secret, mac_secret_size, key, key_len, iv, iv_len)) {
+			fprintf(stdout, "tls1_change_cipher_state_cipher() failed \n",
+					__LINE__);
+			exit(1);
+		}
+	}
+}
+
 void
 cmd_key_block(int data_len, unsigned char* data){
 
@@ -353,12 +458,6 @@ cmd_key_block(int data_len, unsigned char* data){
 	const EVP_CIPHER *cipher = NULL;
 	const EVP_AEAD *aead = NULL;
 	const EVP_MD *mac = NULL;
-	unsigned char *key_block, *seq;
-
-	const unsigned char *client_write_mac_secret, *server_write_mac_secret;
-	const unsigned char *client_write_key, *server_write_key;
-	const unsigned char *client_write_iv, *server_write_iv;
-	const unsigned char *mac_secret, *key, *iv;
 
 	SSL_AEAD_CTX *aead_ctx;
 
@@ -367,16 +466,14 @@ cmd_key_block(int data_len, unsigned char* data){
 
     s->s3->tmp.new_cipher = s_cipher_p;
 
-  fprintf(stdout, " EVP :: %s success \n", __func__);
-  fprintf(stdout, " s->session->cipher->algorithm2 : %lx  %x %x \n", s_cipher_p->algorithm2, s_cipher_p->algorithm_enc, s->s3->tmp.new_cipher->algorithm_enc);
+    fprintf(stdout, " s->session->cipher->algorithm2 : %lx  %x %x \n", s_cipher_p->algorithm2, s_cipher_p->algorithm_enc, s->s3->tmp.new_cipher->algorithm_enc);
 
 
 	if (s_cipher_p->algorithm2 & SSL_CIPHER_ALGORITHM2_AEAD) {
 		if (!ssl_cipher_get_evp_aead_from_cipher(s_cipher_p, &aead)) {
 			  fprintf(stdout, " ssl_cipher_get_evp_aead_from_cipher() failed \n");
-			return ;
+			  exit(1);
 		}
-        fprintf(stdout, " AEAD :: ssl_cipher_get_evp_aead_from_cipher() success \n");
 
 		key_len = EVP_AEAD_key_length(aead);
 		iv_len = SSL_CIPHER_AEAD_FIXED_NONCE_LEN(s_cipher_p);
@@ -384,9 +481,8 @@ cmd_key_block(int data_len, unsigned char* data){
 		if (!ssl_cipher_get_evp_from_cipher(s_cipher_p, &cipher, &mac, &mac_type,
 		    &mac_secret_size)) {
 			  fprintf(stdout, " ssl_cipher_get_evp_from_cipher() failed \n");
-			return ;
+			  exit(1);
 		}
-		fprintf(stdout, " EVP :: ssl_cipher_get_evp_from_cipher() success \n");
 
 		key_len = EVP_CIPHER_key_length(cipher);
 		iv_len = EVP_CIPHER_iv_length(cipher);
@@ -398,18 +494,14 @@ cmd_key_block(int data_len, unsigned char* data){
 
     fprintf(stdout, " mac_secret_size %x, mac_type %x,  key_len %x, iv_len %x, aead %x\n", mac_secret_size, mac_type, key_len, iv_len, aead );
 
-#if 1
     s->s3->tmp.new_aead = aead;
 	s->s3->tmp.new_sym_enc = cipher;
 	s->s3->tmp.new_hash = mac;
 	s->s3->tmp.new_mac_pkey_type = mac_type;
 	s->s3->tmp.new_mac_secret_size = mac_secret_size;
-#endif
-	fprintf(stdout, " __%d__ Success() \n", __LINE__);
 
-	 km = malloc(sgxb->key_block_len);
+	km = malloc(sgxb->key_block_len);
 	tmp = malloc(sgxb->key_block_len);
-	fprintf(stdout, " __%d__ Success() \n", __LINE__);
 
 	ret = tls1_PRF(sgxb->algo2,
 	TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
@@ -422,6 +514,7 @@ cmd_key_block(int data_len, unsigned char* data){
 	s->s3->tmp.key_block_length = sgxb->key_block_len;
 	s->s3->tmp.key_block = km;
 
+#if 0
 
 	fprintf(stdout, " __%d__ Success() \n", __LINE__);
 
@@ -440,7 +533,7 @@ cmd_key_block(int data_len, unsigned char* data){
 	key_block += iv_len;
 	fprintf(stdout, " __%d__ Success() \n", __LINE__);
 
-	char use_client_keys = 1;
+	char use_client_keys = 0;
 	char is_read = 0;
 
 	if (use_client_keys) {
@@ -475,14 +568,11 @@ cmd_key_block(int data_len, unsigned char* data){
 				fprintf(stdout, "tls1_change_cipher_state_aead() failed \n", __LINE__);
 			}
 
-			fprintf(stdout, " __%s__:__%d__ Success() \n", __func__, __LINE__);
 			fprintf(stdout, " __%d__ Success() Tag_len :: %d \n", __LINE__, s->aead_write_ctx->tag_len);
 
 		}
 		else
 		{
-			fprintf(stdout, " Starting tls1_change_cipher_state_cipher () \n");
-
 			if(!tls1_change_cipher_state_cipher(s, is_read, use_client_keys, mac_secret, mac_secret_size, key, key_len, iv, iv_len))
 			{
 				fprintf(stdout, "tls1_change_cipher_state_cipher() failed \n", __LINE__);
@@ -490,7 +580,7 @@ cmd_key_block(int data_len, unsigned char* data){
 		}
 
 		fprintf(stdout, " __%s__:__%d__ Success() \n", __func__, __LINE__);
-
+#endif
 	int i;
 	fprintf(stdout, "keyblock:\n");
 	for (i = 0; i < 136; i++)
@@ -500,8 +590,11 @@ cmd_key_block(int data_len, unsigned char* data){
 	// if something went wrong, return length of 1 to indicate an error
 	sgxbridge_pipe_write((unsigned char *) km, ret ? sgxb->key_block_len : 1);
 
-	free(km);
+	//free(km);
 	free(tmp);
+
+	init_ctx_and_load_keys(0,0);
+	init_ctx_and_load_keys(1,1);
 }
 print_bytes(unsigned char *p, int size)
 {
@@ -522,21 +615,21 @@ cmd_encrypt_record(int data_len, unsigned char* data)
     fprintf(stdout, " Data from ngx : %d - %d \n", sizeof(app_data_encrypt), data_len);
 	fprintf(stdout, " L- %d rec->nonce_used %d evlen %d, len %d\n", __LINE__, rec->nonce_used, rec->eiv_length, rec->record_length);
 
-	fprintf(stdout, " Printing AD:  ");
-	print_bytes(rec->ad, sizeof(rec->ad));
+	//fprintf(stdout, " Printing AD:  ");
+	//print_bytes(rec->ad, sizeof(rec->ad));
 
-	fprintf(stdout, " Printing IP:  len(%d) ", rec->record_length);
-	print_bytes(rec->data_record, rec->record_length);
+	//fprintf(stdout, " Printing IP:  len(%d) ", rec->record_length);
+	//print_bytes(rec->data_record, rec->record_length);
 
-	memcpy(out, rec->out_data, 256);
-	fprintf(stdout, " Printing OP before encrypt :  len(%d) ", rec->record_length+aead->tag_len);
-	print_bytes(out, rec->record_length + aead->tag_len);
+	memcpy(out, rec->out_data, rec->record_length);
+	//fprintf(stdout, " Printing OP before encrypt :  len(%d) ", rec->record_length+aead->tag_len);
+	//print_bytes(out, rec->record_length + aead->tag_len);
 
-	fprintf(stdout, " Printing nonce:  len(16) ");
-	print_bytes(rec->nonce, 16);
 
-	memcpy(out, rec->out_data, 256);
+	//fprintf(stdout, " Printing nonce:  len(16) ");
+	//print_bytes(rec->nonce, 16);
 
+	//fprintf(stdout, " __%d__ success() \n",__LINE__);
 	//if (!EVP_AEAD_CTX_seal(&aead->ctx, (&rec->out_data)+rec->eiv_length, &out_length, rec->record_length + aead->tag_len, rec->nonce,
 	if (!EVP_AEAD_CTX_seal(&aead->ctx, out, &out_length, rec->record_length + aead->tag_len, rec->nonce,
 	    rec->nonce_used, rec->data_record + rec->eiv_length, rec->record_length, rec->ad, sizeof(rec->ad)))
@@ -544,10 +637,10 @@ cmd_encrypt_record(int data_len, unsigned char* data)
 		fprintf(stdout, "EVP_AEAD_CTX_seal () failed \n");
 		return;
 	}
-
+	//fprintf(stdout, " __%d__ success() \n",__LINE__);
 	//memcpy()
-    fprintf(stdout, " Printing OP after encrypt : len(%d) ", out_length);
-	print_bytes(out, out_length);
+    //fprintf(stdout, " Printing OP after encrypt : len(%d) ", out_length);
+	//print_bytes(out, out_length);
 
 #if 0
 	if (aead->variable_nonce_in_record)
@@ -562,6 +655,60 @@ cmd_encrypt_record(int data_len, unsigned char* data)
 	sgxbridge_pipe_write((unsigned char *) &out_length, sizeof(int));
 	sgxbridge_pipe_write((unsigned char *) out, out_length);
 }
+
+void
+cmd_decrypt_record(int data_len, unsigned char* data)
+{
+	app_data_encrypt *rec = (app_data_encrypt *)data;
+	const SSL_AEAD_CTX *aead =  s->aead_read_ctx;
+	int i, out_length = 0;
+	unsigned char out[256];
+
+    fprintf(stdout, " Data from ngx : %d - %d \n", sizeof(app_data_encrypt), data_len);
+	fprintf(stdout, " L- %d rec->nonce_used %d evlen %d, len %d\n", __LINE__, rec->nonce_used, rec->eiv_length, rec->record_length);
+
+	fprintf(stdout, " Printing AD:  ");
+	//print_bytes(rec->ad, sizeof(rec->ad));
+
+	fprintf(stdout, " Printing IP:  len(%d) ", rec->record_length);
+	print_bytes(rec->data_record, rec->record_length);
+
+	memcpy(out, rec->out_data, rec->record_length + aead->tag_len);
+	//fprintf(stdout, " Printing OP before encrypt :  len(%d) ", rec->record_length+aead->tag_len);
+	//print_bytes(out, rec->record_length + aead->tag_len);
+
+
+	//fprintf(stdout, " Printing nonce:  len(16) ");
+	//print_bytes(rec->nonce, 16);
+
+	//if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len, nonce, nonce_used, in, len + aead->tag_len, ad, sizeof(ad)))
+	if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_length, rec->record_length, rec->nonce, rec->nonce_used, rec->data_record,
+			rec->record_length + aead->tag_len, rec->ad, sizeof(rec->ad)))
+	{
+		fprintf(stdout, "EVP_AEAD_CTX_open () failed \n");
+		exit(1);
+	}
+
+	//fprintf(stdout, " __%d__ success() \n",__LINE__);
+	//memcpy()
+    //fprintf(stdout, " Printing OP after encrypt : len(%d) ", out_length);
+	//print_bytes(out, out_length);
+
+#if 0
+	if (aead->variable_nonce_in_record)
+	{
+		fprintf(stdout, "variable_nonce_in_record incrementing length %d \n", aead->variable_nonce_len);
+		out_length += aead->variable_nonce_len;
+	}
+#endif
+
+	fprintf(stdout, "Writing data to server len-(%d) \n",out_length);
+
+	sgxbridge_pipe_write((unsigned char *) &out_length, sizeof(int));
+	sgxbridge_pipe_write((unsigned char *) out, out_length);
+}
+
+
 
 #else
 void

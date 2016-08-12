@@ -956,7 +956,7 @@ tls1_enc(SSL *s, int send)
 			unsigned char sgx_out[256];
 			int out_length = 0;
 			memcpy(app_data_p->ad, ad, sizeof(ad));
-			memcpy(app_data_p->data_record, rec->input, 16);
+			memcpy(app_data_p->data_record, rec->input, len);
 			//my_memcpy(app_data_p->data_record+8, in+8, 8);
 
 			memcpy(app_data_p->nonce, nonce, sizeof(nonce));
@@ -1062,11 +1062,40 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+			app_data_encrypt app_data, *app_data_p;
+			app_data_p = &app_data;
+			memset(app_data_p, 0, sizeof(app_data_encrypt));
+			//app_data_p->eiv_length = eivlen;
+			app_data_p->record_length = len;
+			unsigned char sgx_out[256];
+			int out_length = 0;
+			memcpy(app_data_p->ad, ad, sizeof(ad));
+
+			memcpy(app_data_p->nonce, nonce, sizeof(nonce));
+			app_data_p->nonce_used = nonce_used;
+			memcpy(app_data_p->out_data, out, len + aead->tag_len );
+			memcpy(app_data_p->data_record, in, len + aead->tag_len);
+
+
+
+#ifdef OPENSSL_WITH_SGX
+			//#if 0
+			sgxbridge_pipe_write_cmd(CMD_DECRYPT_RECORD,
+					sizeof(app_data_encrypt), (unsigned char *) app_data_p);
+
+			sgxbridge_pipe_read(sizeof(int), &out_length);
+			sgxbridge_pipe_read(out_length, sgx_out);
+
+			memcpy(out, sgx_out, out_length);
+
+			out_len = out_length;
+
+#else
 			if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
 			    nonce, nonce_used, in, len + aead->tag_len, ad,
 			    sizeof(ad)))
 				return -1;
-
+#endif
 			rec->data = rec->input = out;
 		}
 

@@ -3,7 +3,7 @@
 
 #include <openssl/ssl.h>
 
-#define CMD_MAX_BUF_SIZE 1024
+#define CMD_MAX_BUF_SIZE 10000
 
 #define CMD_SESS_ID 			0x00
 #define CMD_CLNT_RAND 			0x01
@@ -12,11 +12,12 @@
 #define CMD_MASTER_SEC 			0x04
 #define CMD_RSA_SIGN 			0x06
 #define CMD_RSA_SIGN_SIG_ALG 		0x07
-#define CMD_KEY_BLOCK 			0x08
+#define CMD_KEY_BLOCK 			    0x08
 #define CMD_FINAL_FINISH_MAC		0x09
 #define CMD_GET_ECDHE_PUBLIC_PARAM 	0x0A
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
-#define CMD_ENCRYPT_RECORD    0x0C
+#define CMD_ENCRYPT_RECORD    		0x0C
+#define CMD_DECRYPT_RECORD 	  		0x0D
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -77,8 +78,8 @@ typedef struct
 
 typedef struct
 {
-  unsigned char data[256];    /* pointer to the record data */
-  unsigned char input[256];   /* where the decode bytes are */
+  unsigned char data[4096];    /* pointer to the record data */
+  unsigned char input[4096];   /* where the decode bytes are */
   unsigned char seq_num[8]; /* sequence number, needed by DTLS1 */
   unsigned char write_seq_num[8];
   unsigned int type;               /* type of record */

@@ -66,6 +66,7 @@ void cmd_final_finish_mac(int data_len, unsigned char *data);
 void cmd_ecdhe_get_public_param(int data_len, unsigned char* data);
 void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data);
 void cmd_encrypt_record(int data_len, unsigned char* data);
+void cmd_decrypt_record(int data_len, unsigned char* data);
 
 
 extern int cmd_counter;

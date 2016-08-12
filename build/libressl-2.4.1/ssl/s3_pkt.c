@@ -709,8 +709,6 @@ do_ssl3_write(SSL *s, int type, const unsigned char *buf,
 	 * from wr->input.  Length should be wr->length.
 	 * wr->data still points in the wb->buf */
 
-	fprintf(stdout, " __%s__ __%d__, mac-size: %dsuccess() ",__func__,  __LINE__, mac_size);
-
 	if (mac_size != 0) {
 		fprintf(stdout, " __%s__ __%d__, mac-size: %dsuccess() ",__func__,  __LINE__, mac_size);
 
