@@ -1471,6 +1471,7 @@ aead_aes_gcm_open(const EVP_AEAD_CTX *ctx, unsigned char *out, size_t *out_len,
 	size_t bulk = 0;
 
 	if (in_len < gcm_ctx->tag_len) {
+		printf("in_len < gcm_ctx->tag_len\n");
 		EVPerr(EVP_F_AEAD_AES_GCM_OPEN, EVP_R_BAD_DECRYPT);
 		return 0;
 	}
@@ -1478,6 +1479,7 @@ aead_aes_gcm_open(const EVP_AEAD_CTX *ctx, unsigned char *out, size_t *out_len,
 	plaintext_len = in_len - gcm_ctx->tag_len;
 
 	if (max_out_len < plaintext_len) {
+		printf("max_out_len < plaintext_len\n");
 		EVPerr(EVP_F_AEAD_AES_GCM_OPEN, EVP_R_BUFFER_TOO_SMALL);
 		return 0;
 	}
@@ -1485,21 +1487,28 @@ aead_aes_gcm_open(const EVP_AEAD_CTX *ctx, unsigned char *out, size_t *out_len,
 	memcpy(&gcm, &gcm_ctx->gcm, sizeof(gcm));
 	CRYPTO_gcm128_setiv(&gcm, nonce, nonce_len);
 
-	if (CRYPTO_gcm128_aad(&gcm, ad, ad_len))
+	if (CRYPTO_gcm128_aad(&gcm, ad, ad_len)) {
+		printf("CRYPTO_gcm128_aad(...)\n");
 		return 0;
+	}
 
 	if (gcm_ctx->ctr) {
 		if (CRYPTO_gcm128_decrypt_ctr32(&gcm, in + bulk, out + bulk,
-		    in_len - bulk - gcm_ctx->tag_len, gcm_ctx->ctr))
+		    in_len - bulk - gcm_ctx->tag_len, gcm_ctx->ctr)) {
+			printf("CRYPTO_gcm128_decrypt_ctr32\n");
 			return 0;
+		}
 	} else {
 		if (CRYPTO_gcm128_decrypt(&gcm, in + bulk, out + bulk,
-		    in_len - bulk - gcm_ctx->tag_len))
+		    in_len - bulk - gcm_ctx->tag_len)) {
+			printf("CRYPTO_gcm128_decrypt\n");
 			return 0;
+		}
 	}
 
 	CRYPTO_gcm128_tag(&gcm, tag, gcm_ctx->tag_len);
 	if (timingsafe_memcmp(tag, in + plaintext_len, gcm_ctx->tag_len) != 0) {
+		printf("EVP_R_BAD_DECRYPT\n");
 		EVPerr(EVP_F_AEAD_AES_GCM_OPEN, EVP_R_BAD_DECRYPT);
 		return 0;
 	}

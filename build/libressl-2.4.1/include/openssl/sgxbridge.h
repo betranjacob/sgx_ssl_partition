@@ -17,6 +17,7 @@
 #define CMD_GET_ECDHE_PUBLIC_PARAM 	0x0A
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
 #define CMD_ENCRYPT_RECORD    0x0C
+#define CMD_DECRYPT_RECORD    0x0D
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -52,6 +53,7 @@ typedef struct
   char str[16];
   int str_len;
   SSL_CIPHER s_cipher;
+  int ssl_version;
   unsigned char buf[2 * EVP_MAX_MD_SIZE];
 } sgxbridge_st;
 
@@ -74,6 +76,16 @@ typedef struct
   unsigned int record_length;
 } app_data_encrypt;
 
+typedef struct
+{
+  unsigned char ad[13];
+  unsigned char nonce[16];
+  unsigned char in[256];
+  unsigned char out[256];
+  unsigned int nonce_used;
+  unsigned int eivlen;
+  unsigned int in_len;
+} app_data;
 
 typedef struct
 {

@@ -150,7 +150,7 @@
 void
 tls1_cleanup_key_block(SSL *s)
 {
-	printf("tls1_cleanup_key_block\n");
+	// printf("tls1_cleanup_key_block\n");
 	if (s->s3->tmp.key_block != NULL) {
 		explicit_bzero(s->s3->tmp.key_block,
 		    s->s3->tmp.key_block_length);
@@ -455,7 +455,7 @@ int
 tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
     unsigned key_len, const unsigned char *iv, unsigned iv_len)
 {
-	printf("tls1_change_cipher_state\n");
+	printf("tls1_change_cipher_state_aead\n");
 	const EVP_AEAD *aead = s->s3->tmp.new_aead;
 	SSL_AEAD_CTX *aead_ctx;
 
@@ -627,8 +627,9 @@ tls1_change_cipher_state(SSL *s, int which)
 	const EVP_AEAD *aead;
 	char is_read, use_client_keys;
 
-
+	// printf("calling: cipher = s->s3->tmp.new_sym_enc\n");
 	cipher = s->s3->tmp.new_sym_enc;
+	// printf("calling: aead = s->s3->tmp.new_aead\n");
 	aead = s->s3->tmp.new_aead;
 
 	/*
@@ -651,26 +652,45 @@ tls1_change_cipher_state(SSL *s, int which)
 	 * Reset sequence number to zero - for DTLS this is handled in
 	 * dtls1_reset_seq_numbers().
 	 */
+	// printf("calling: SSL_IS_DTLS(s)\n");
 	if (!SSL_IS_DTLS(s)) {
+		// if(is_read)
+		// 	printf("accessing: s->s3->read_sequence\n");
+		// else
+		// 	printf("accessing: s->s3->write_sequence\n");
 		seq = is_read ? s->s3->read_sequence : s->s3->write_sequence;
 		memset(seq, 0, SSL3_SEQUENCE_SIZE);
 	}
 
 	if (aead != NULL) {
+		printf("calling: key_len = EVP_AEAD_key_length(aead)\n");
 		key_len = EVP_AEAD_key_length(aead);
+		printf("key_len = %d\n", key_len);
+		// printf("calling: iv_len = SSL_CIPHER_AEAD_FIXED_NONCE_LEN(s->s3->tmp.new_cipher)\n");
+		printf("algo2: %d\n", s->s3->tmp.new_cipher->algorithm2);
 		iv_len = SSL_CIPHER_AEAD_FIXED_NONCE_LEN(s->s3->tmp.new_cipher);
+		printf("iv_len = %d\n", iv_len);
 	} else {
+		printf("calling: key_len = EVP_CIPHER_key_length(cipher)\n");
 		key_len = EVP_CIPHER_key_length(cipher);
+		printf("key_len = %d\n", key_len);
+		// printf("calling: iv_len = EVP_CIPHER_iv_length(cipher)\n");
 		iv_len = EVP_CIPHER_iv_length(cipher);
+		printf("iv_len = %d\n", iv_len);
 
 		/* If GCM mode only part of IV comes from PRF. */
+		// printf("calling: EVP_CIPHER_mode(cipher)\n");
 		if (EVP_CIPHER_mode(cipher) == EVP_CIPH_GCM_MODE)
 			iv_len = EVP_GCM_TLS_FIXED_IV_LEN;
 	}
 
+	// printf("accessing: s->s3->tmp.new_mac_secret_size\n");
 	mac_secret_size = s->s3->tmp.new_mac_secret_size;
 
+	printf("accessing: s->s3->tmp.key_block\n");
 	key_block = s->s3->tmp.key_block;
+	printf("key_block (%d)\n", s->s3->tmp.key_block_length);
+	print_hex(key_block, s->s3->tmp.key_block_length);
 	client_write_mac_secret = key_block;
 	key_block += mac_secret_size;
 	server_write_mac_secret = key_block;
@@ -684,6 +704,10 @@ tls1_change_cipher_state(SSL *s, int which)
 	server_write_iv = key_block;
 	key_block += iv_len;
 
+	printf("mac_secret_size: %d\n", mac_secret_size);
+	// printf("key_len: %d\n", key_len);
+	// printf("iv_len: %d\n", iv_len);
+
 	if (use_client_keys) {
 		mac_secret = client_write_mac_secret;
 		key = client_write_key;
@@ -694,11 +718,22 @@ tls1_change_cipher_state(SSL *s, int which)
 		iv = server_write_iv;
 	}
 
+	printf("mac_secret (%d)\n", mac_secret_size);
+	print_hex(mac_secret, mac_secret_size);
+	printf("key (%d)\n", key_len);
+	print_hex(key, key_len);
+	printf("iv (%d)\n", iv_len);
+	print_hex(iv, iv_len);
+
+	printf("accessing: s->s3->tmp.key_block_length\n");
+	printf("end: %d\n", key_block);
+	printf("start: %d\n", s->s3->tmp.key_block);
+	printf("len: %d\n", key_block - s->s3->tmp.key_block);
 	if (key_block - s->s3->tmp.key_block != s->s3->tmp.key_block_length) {
 		SSLerr(SSL_F_TLS1_CHANGE_CIPHER_STATE, ERR_R_INTERNAL_ERROR);
 		goto err2;
 	}
-
+	printf("after keyblock length check\n");
 	if (is_read) {
 		memcpy(s->s3->read_mac_secret, mac_secret, mac_secret_size);
 		s->s3->read_mac_secret_size = mac_secret_size;
@@ -706,12 +741,14 @@ tls1_change_cipher_state(SSL *s, int which)
 		memcpy(s->s3->write_mac_secret, mac_secret, mac_secret_size);
 		s->s3->write_mac_secret_size = mac_secret_size;
 	}
-
+	printf("after memcpy mac secret\n");
 	if (aead != NULL) {
+		printf("calling: tls1_change_cipher_state_aead\n");
 		return tls1_change_cipher_state_aead(s, is_read, key, key_len,
 		    iv, iv_len);
 	}
 
+	printf("calling: tls1_change_cipher_state_cipher\n");
 	return tls1_change_cipher_state_cipher(s, is_read, use_client_keys,
 	    mac_secret, mac_secret_size, key, key_len, iv, iv_len);
 
@@ -789,7 +826,8 @@ tls1_setup_key_block(SSL *s)
         sgxbridge_st sgxb;
         sgxb.s_cipher = *(s->session->cipher);
         sgxb.key_block_len = key_block_len;
-        sgxb.algo2 = ssl_get_algorithm2(s);
+        sgxb.ssl_version = s->session->ssl_version;
+        sgxb.algo2 = ssl_get_algorithm2(s);	// TODO: this is already in s_cipher
 
         sgxbridge_pipe_write_cmd(CMD_KEY_BLOCK,
                 sizeof(sgxbridge_st),
@@ -801,9 +839,7 @@ tls1_setup_key_block(SSL *s)
 
         int i;
         fprintf(stdout, "keyblock (%d):\n", key_block_len);
-        for(i = 0; i < key_block_len; i++)
-            fprintf(stdout, "%x", key_block[i]);
-        fprintf(stdout, "\n");
+        print_hex(key_block, key_block_len);
 #else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
@@ -948,6 +984,10 @@ tls1_enc(SSL *s, int send)
 			ad[12] = len & 0xff;
 			fprintf(stdout, "Seal - eivlen %d, out_len %d, len %d, aead->tag_len %d, nonce_used %d, len %d \n", eivlen, out_len, len, aead->tag_len,nonce_used, len);
 
+// #ifndef OPENSSL_WITH_SGX
+#ifdef OPENSSL_WITH_SGX
+// #if 0
+			// TODO: wrap it in a function?
 			app_data_encrypt app_data, *app_data_p;
 			app_data_p = &app_data;
 			memset(app_data_p, 0, sizeof(app_data_encrypt));
@@ -963,43 +1003,36 @@ tls1_enc(SSL *s, int send)
 			app_data_p->nonce_used = nonce_used;
 			memcpy(app_data_p->out_data, out, len+aead->tag_len);
 
-	        fprintf(stdout, " Data to sgx : %d \n", sizeof(app_data_encrypt));
+	        fprintf(stdout, " Data to sgx (%d)\n", sizeof(app_data_encrypt));
 
-	    	fprintf(stdout, " AD  len(13) ");
-	    	  for (i=0; i< 13; i++)
-	    		fprintf(stdout, " [%x]", ad[i], app_data_p->ad[i]);
-   			fprintf(stdout, " \n ");
+	    	fprintf(stdout, " AD (13)\n");
+	    	print_hex(app_data_p->ad, 13);
 
-	        fprintf(stdout, " In Record Before encrypt : len(%d) ", len);
-			for (i=0; i< len; i++)
-				fprintf(stdout, " [%x]", in[i], app_data_p->data_record[i]);
-			fprintf(stdout, " \n ");
+	        fprintf(stdout, " In record BEFORE encrypt (%d)\n", len);
+			print_hex(app_data_p->data_record, len);
 
-			fprintf(stdout, " Out record Before encrypt : len(%d) ", len+aead->tag_len);
-			for (i=0; i< len+aead->tag_len; i++)
-				fprintf(stdout, " [%x]", out[i], app_data_p->out_data[i]);
-			fprintf(stdout, " \n ");
+			fprintf(stdout, " Out record BEFORE encrypt (%d)\n", len+aead->tag_len);
+			print_hex(app_data_p->out_data, len+aead->tag_len);
 
-	        fprintf(stdout, " Nonce : ", len);
-        	for (i=0; i< 16; i++)
-        		fprintf(stdout, " [%x]", nonce[i], app_data_p->nonce[i]);
-        	fprintf(stdout, " \n ");
+	        fprintf(stdout, " Nonce (%d)\n", 16);
+	        print_hex(app_data_p->nonce, 16);
 
-
-
-#ifdef OPENSSL_WITH_SGX
-//#if 0
 	        sgxbridge_pipe_write_cmd(CMD_ENCRYPT_RECORD, sizeof(app_data_encrypt), (unsigned char *)app_data_p);
 
-	        sgxbridge_pipe_read(sizeof(int), &out_length);
-	        sgxbridge_pipe_read(out_length, sgx_out);
+	        // TODO: thats probablu quite bad, check for length
+	        sgxbridge_pipe_read(sizeof(int), &out_len);
+	        sgxbridge_pipe_read(out_len, out + eivlen);
 
-	        memcpy(out + eivlen, sgx_out, out_length);
+	        printf("Out record AFTER encrypt sgx:\n");
+	        print_hex(out + eivlen, out_len);
 
-	        out_len = out_length;
+			if (!EVP_AEAD_CTX_seal(&aead->ctx, out + eivlen, &out_len, len + aead->tag_len, nonce, nonce_used, in + eivlen, len, ad, sizeof(ad)))
+				return -1;
+
+			printf("Out record AFTER encrypt stock:\n");
+	        print_hex(out + eivlen, out_len);
 
 #else
-
 			if (!EVP_AEAD_CTX_seal(&aead->ctx, out + eivlen, &out_len, len + aead->tag_len, nonce, nonce_used, in + eivlen, len, ad, sizeof(ad)))
 				return -1;
 #endif
@@ -1010,11 +1043,8 @@ tls1_enc(SSL *s, int send)
 						fprintf(stdout, "variable_nonce_in_record incrementing length %d, OutLen(%d) \n", aead->variable_nonce_len, out_len);
 			}
 
-			fprintf(stdout, " Out record SGX : len(%d) ", out_len);
-			for (i=0; i< out_len; i++)
-				fprintf(stdout, "[%x] ", out[i]);
-			fprintf(stdout, " \n ");
-
+			fprintf(stdout, " Out record SGX (%d)\n", out_len);
+			print_hex(out, out_len);
 		} else {
 			/* receive */
 			size_t len = rec->length;
@@ -1022,6 +1052,9 @@ tls1_enc(SSL *s, int send)
 			if (rec->data != rec->input)
 				return -1;  /* internal error - should never happen. */
 			out = in = rec->input;
+
+			fprintf(stdout, "receiving (%d)\n", len);
+			print_hex(in, len);
 
 			if (len < aead->variable_nonce_len)
 				return 0;
@@ -1062,10 +1095,48 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+// #ifndef OPENSSL_WITH_SGX
+// #ifdef OPENSSL_WITH_SGX
+#if 0
+			app_data sgx_data, *sgx_data_p;
+			sgx_data_p = &sgx_data;
+			
+			memset(sgx_data_p, 0, sizeof(app_data));
+			
+			sgx_data_p->in_len = len;
+			sgx_data_p->nonce_used = nonce_used;
+			memcpy(sgx_data_p->ad, ad, sizeof(ad));
+			memcpy(sgx_data_p->in, in, 16);
+			memcpy(sgx_data_p->nonce, nonce, sizeof(nonce));
+			memcpy(sgx_data_p->out, out, len+aead->tag_len);
+
+	        fprintf(stdout, " Data to sgx (%d)\n", sizeof(app_data));
+
+	    	fprintf(stdout, " AD (%d)\n", 13);
+	    	print_hex(sgx_data_p->ad, 13);
+
+	        fprintf(stdout, " INPUT before decrypt (%d)\n", len);
+			print_hex(sgx_data_p->in, len);
+
+			fprintf(stdout, " OUTPUT before decrypt (%d)\n", len+aead->tag_len);
+			print_hex(sgx_data_p->out, len+aead->tag_len);
+
+	        fprintf(stdout, " Nonce (%d)", 16);
+	        print_hex(sgx_data_p->nonce, 16);
+
+	        // TODO: i would call it as sgxbridge_evp_aead_ctx_open passing s
+			// so we can reference connections by sgx id
+	        sgxbridge_pipe_write_cmd(CMD_DECRYPT_RECORD, sizeof(app_data), (unsigned char *)sgx_data_p);
+
+	        sgxbridge_pipe_read(sizeof(int), &out_len);
+	        sgxbridge_pipe_read(out_len, out);
+#else
+
 			if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
 			    nonce, nonce_used, in, len + aead->tag_len, ad,
 			    sizeof(ad)))
 				return -1;
+#endif
 
 			rec->data = rec->input = out;
 		}
@@ -1081,7 +1152,7 @@ tls1_enc(SSL *s, int send)
 			int n = EVP_MD_CTX_size(s->write_hash);
 			OPENSSL_assert(n >= 0);
 		}
-		fprintf(stdout, " __%d__ success() ", __LINE__);
+		fprintf(stdout, " __%d__ success()\n", __LINE__);
 
 		ds = s->enc_write_ctx;
 		if (s->enc_write_ctx == NULL)
@@ -1117,7 +1188,7 @@ tls1_enc(SSL *s, int send)
 		else
 			enc = EVP_CIPHER_CTX_cipher(s->enc_read_ctx);
 	}
-	fprintf(stdout, " __%d__ success() ", __LINE__);
+	fprintf(stdout, " __%d__ success()\n", __LINE__);
 
 	if ((s->session == NULL) || (ds == NULL) || (enc == NULL)) {
 		memmove(rec->data, rec->input, rec->length);
@@ -1195,6 +1266,8 @@ tls1_enc(SSL *s, int send)
 				return 0;
 		}
 
+		// TODO: shoud we move this to the enclave?
+		printf("DEBUG: should we move EVP_Cipher(...) to the enclave?\n");
 		i = EVP_Cipher(ds, rec->data, rec->input, l);
 		if ((EVP_CIPHER_flags(ds->cipher) &
 		    EVP_CIPH_FLAG_CUSTOM_CIPHER) ? (i < 0) : (i == 0))
@@ -1213,7 +1286,7 @@ tls1_enc(SSL *s, int send)
 		if (pad && !send)
 			rec->length -= pad;
 	}
-	fprintf(stdout, " __%d__ success() ", __LINE__);
+	fprintf(stdout, " __%d__ success()\n", __LINE__);
 
 	return ret;
 }
@@ -1308,10 +1381,7 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
 
         fprintf(stdout, "final finish MAC (%d): %s\n",
             s->s3->tmp.peer_finish_md_len, str);
-
-        for(i = 0; i < s->s3->tmp.peer_finish_md_len; i++)
-            fprintf(stdout, "%x", out[i]);
-        fprintf(stdout, "\n");
+        print_hex(out, s->s3->tmp.peer_finish_md_len);
 #else
 	if (!tls1_PRF(ssl_get_algorithm2(s), str, slen, buf, (int)(q - buf),
 	    NULL, 0, NULL, 0, NULL, 0,
@@ -1340,6 +1410,8 @@ tls1_mac(SSL *ssl, unsigned char *md, int send)
 	    (ssl->mac_flags & SSL_MAC_FLAG_WRITE_MAC_STREAM) :
 	    (ssl->mac_flags & SSL_MAC_FLAG_READ_MAC_STREAM));
 	int t;
+
+	printf("DEBUG: need to instrument tls1_mac\n");
 
 	if (send) {
 		rec = &(ssl->s3->wrec);

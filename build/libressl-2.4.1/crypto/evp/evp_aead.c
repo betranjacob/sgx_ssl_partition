@@ -126,6 +126,7 @@ EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, unsigned char *out, size_t *out_len,
 {
 	if (!check_alias(in, in_len, out)) {
 		EVPerr(EVP_F_AEAD_CTX_OPEN, EVP_R_OUTPUT_ALIASES_INPUT);
+		printf("check_alias failed\n");
 		goto error;
 	}
 
@@ -133,6 +134,7 @@ EVP_AEAD_CTX_open(const EVP_AEAD_CTX *ctx, unsigned char *out, size_t *out_len,
 	    in, in_len, ad, ad_len)) {
 		return 1;
 	}
+	printf("aead->open failed\n");
 
 error:
 	/* In the event of an error, clear the output buffer so that a caller
