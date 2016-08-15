@@ -59,7 +59,7 @@ build_nginx() {
 	echo $(pwd)
 
 	#no strip for callgrind
-	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
 
 	# build nginx, with various modules included/excluded
 	echo "Configure & Build Nginx"
@@ -143,7 +143,7 @@ build_libressl_sgx() {
 	aclocal
         automake
 	autoconf
-	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
+	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-sgx --enable-shared=no && make -j $NB_PROC
 
 	cd $BPATH
 	cd ..
