@@ -48,7 +48,7 @@ print_finish() {
 	echo "which are available at /etc/nginx-default";
 }
 
-build_nginx() {
+build_libressl() {
 	# build static LibreSSL
 	echo "Configure & Build LibreSSL"
 	
@@ -60,7 +60,9 @@ build_nginx() {
 
 	#no strip for callgrind
 	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+}
 
+build_nginx() {
 	# build nginx, with various modules included/excluded
 	echo "Configure & Build Nginx"
 	cd $BPATH/$VERSION_NGINX
@@ -142,7 +144,7 @@ build_libressl_sgx() {
 	aclocal
         automake
 	autoconf
-	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
+	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include -Wno-parentheses" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
 
 	cd $BPATH
 	cd ..
@@ -230,6 +232,17 @@ case "$1" in
 	build_libressl_sgx
   ;;
   --ns)
+	build_libressl_sgx
+  ;;
+  -l)
+	build_libressl
+
+	echo "Copying changed libressl files"
+	$RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/opensgx/libsgx/libressl/crypto/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/opensgx/libsgx/libressl/ssl/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/opensgx/libsgx/libressl/include/openssl/
+	
 	build_libressl_sgx
   ;;
   -s|--sgx)
