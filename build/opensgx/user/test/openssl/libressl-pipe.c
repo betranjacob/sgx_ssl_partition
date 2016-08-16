@@ -79,15 +79,8 @@ enclave_main(int argc, char** argv)
 void
 init_session(SGX_SESSION *sgx_s)
 {
-  if((sgx_s->server_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
-    fprintf(stderr, "server random calloc() failed: %s\n", strerror(errno));
-    sgx_exit(NULL);
-  }
-
-  if((sgx_s->client_random = calloc(SSL3_RANDOM_SIZE, 1)) == NULL){
-    fprintf(stderr, "client random calloc() failed: %s\n", strerror(errno));
-    sgx_exit(NULL);
-  }
+  sgx_s->s = SSL_new(ctx);
+  ssl_get_new_session(sgx_s->s, 1);
 }
 
 // just some debug output
@@ -95,11 +88,11 @@ void
 print_session_params(SSL* s)
 {
   printf("client_random:\n");
-  print_hex(sgx_sess->client_random, SSL3_RANDOM_SIZE);
+  print_hex(sgx_sess->s->s3->client_random, SSL3_RANDOM_SIZE);
   printf("server_random:\n");
-  print_hex(sgx_sess->server_random, SSL3_RANDOM_SIZE);
+  print_hex(sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE);
   printf("master_key:\n");
-  print_hex(sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE);
+  print_hex(sgx_sess->s->session->master_key, SSL3_MASTER_SECRET_SIZE);
 }
 
 // TODO: should the ctx be a parameter? other stuff?
@@ -257,11 +250,11 @@ void
 cmd_clnt_rand(int data_len, unsigned char* data)
 {
   // TODO: check on data_len?
-  memcpy(sgx_sess->client_random, data, SSL3_RANDOM_SIZE);
+  memcpy(sgx_sess->s->s3->client_random, data, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("client random:\n");
-  print_hex(sgx_sess->client_random, data_len);
+  print_hex(sgx_sess->s->s3->client_random, data_len);
 }
 
 void
@@ -270,14 +263,14 @@ cmd_srv_rand(int data_len, unsigned char* data)
   int random_len = *((int *)data);
 
   // TODO: check on data len
-  arc4random_buf(sgx_sess->server_random, SSL3_RANDOM_SIZE);
+  arc4random_buf(sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("server random:\n");
-  print_hex(sgx_sess->server_random, random_len);
+  print_hex(sgx_sess->s->s3->server_random, random_len);
 
   // Send the result
-  sgxbridge_pipe_write(sgx_sess->server_random, random_len);
+  sgxbridge_pipe_write(sgx_sess->s->s3->server_random, random_len);
 }
 
 void
@@ -303,15 +296,15 @@ cmd_master_sec(int data_len, unsigned char* data)
 
   ret = tls1_PRF(*algo2,
       TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
-      sgx_sess->client_random, SSL3_RANDOM_SIZE, NULL, 0,
-      sgx_sess->server_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sgx_sess->s->s3->client_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE, NULL, 0,
       sgx_sess->premaster_secret, sgx_sess->premaster_secret_length,
-      sgx_sess->master_key, buf, sizeof(buf));
+      sgx_sess->s->session->master_key, buf, sizeof(buf));
 
   int i;
   fprintf(stdout, "master key:\n");
   for(i = 0; i < SSL_MAX_MASTER_KEY_LENGTH; i++){
-    fprintf(stdout, "%x", sgx_sess->master_key[i]);
+    fprintf(stdout, "%x", sgx_sess->s->session->master_key[i]);
   }
   fprintf(stdout, "\n");
 }
@@ -363,8 +356,8 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 
   EVP_MD_CTX_init(&md_ctx);
   EVP_SignInit_ex(&md_ctx, md, NULL);
-  EVP_SignUpdate(&md_ctx, sgx_sess->client_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, sgx_sess->server_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, sgx_sess->s->s3->client_random, SSL3_RANDOM_SIZE);
+  EVP_SignUpdate(&md_ctx, sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, md_buf, data_len);
 
   if (!EVP_SignFinal(&md_ctx,
@@ -400,10 +393,10 @@ cmd_key_block(int data_len, unsigned char* data){
 
   ret = tls1_PRF(sgxb->algo2,
       TLS_MD_KEY_EXPANSION_CONST, TLS_MD_KEY_EXPANSION_CONST_SIZE,
-      sgx_sess->server_random, SSL3_RANDOM_SIZE,
-      sgx_sess->client_random, SSL3_RANDOM_SIZE,
+      sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE,
+      sgx_sess->s->s3->client_random, SSL3_RANDOM_SIZE,
       NULL, 0, NULL, 0,
-      sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE,
+      sgx_sess->s->session->master_key, SSL3_MASTER_SECRET_SIZE,
       km, tmp, sgxb->key_block_len);
 
   int i;
@@ -433,7 +426,7 @@ cmd_final_finish_mac(int data_len, unsigned char* data){
       sgxb->str, sgxb->str_len,
       sgxb->buf, sgxb->key_block_len,
       NULL, 0, NULL, 0, NULL, 0,
-      sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE,
+      sgx_sess->s->session->master_key, SSL3_MASTER_SECRET_SIZE,
       peer_finish_md, buf2, sizeof(buf2));
 
   int i;
@@ -623,9 +616,6 @@ cmd_ssl_session_remove(int data_len, unsigned char *data)
   fprintf(stdout, "Removing SSL session from cache...");
   lh_SGX_SESSION_delete(ssl_sess_lh, sgx_sess);
 
-  free(sgx_sess->client_random);
-  free(sgx_sess->server_random);
-  free(sgx_sess);
-
+  SSL_free(sgx_sess->s);
   fprintf(stdout, "Done\n");
 }
