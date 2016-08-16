@@ -635,6 +635,7 @@ cmd_ssl_session_remove(int data_len, unsigned char *data)
 void
 cmd_change_cipher_state(int data_len, unsigned char *data)
 {
+  int status;
   sgx_change_cipher_st *sgx_change_cipher;
   sgx_change_cipher = (sgx_change_cipher_st *) data;
 
@@ -678,6 +679,10 @@ cmd_change_cipher_state(int data_len, unsigned char *data)
       &sgx_change_cipher->new_cipher, sizeof(SSL_CIPHER));
   sgx_sess->s->s3->tmp.new_mac_secret_size =
     sgx_change_cipher->new_mac_secret_size;
+
+  status = tls1_change_cipher_state(
+      sgx_sess->s, SSL3_CHANGE_CIPHER_SERVER_WRITE);
+  sgxbridge_pipe_write(status, sizeof(status));
 
   fprintf(stdout, "Done\n");
 }

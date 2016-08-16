@@ -652,9 +652,9 @@ ssl3_accept(SSL *s)
                         sgxbridge_pipe_write_cmd(s, CMD_CHANGE_CIPHER_STATE,
                             sizeof(sgx_change_cipher_st),
                             (unsigned char *) &sgx_change_cipher);
-
-			if (!s->method->ssl3_enc->change_cipher_state(
-			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
+                        int status;
+                        sgxbridge_pipe_read(sizeof(status), &status);
+			if (!status) {
 				ret = -1;
 				goto end;
 			}
