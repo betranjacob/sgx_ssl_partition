@@ -164,10 +164,6 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 
-#ifdef OPENSSL_WITH_SGX
-#include <openssl/sgxbridge.h>
-#endif
-
 #include "bytestring.h"
 
 #define ENTER() fprintf(stderr, "%s >>Enter>> %s() \n", __FILE__, __func__);
@@ -618,12 +614,57 @@ ssl3_accept(SSL *s)
 				goto end;
 			s->state = SSL3_ST_SW_FINISHED_A;
 			s->init_num = 0;
+#if OPENSSL_WITH_SGX
+                        sgx_change_cipher_st sgx_change_cipher;
+
+                        sgx_change_cipher.version = s->version;
+                        sgx_change_cipher.mac_flags = s->mac_flags;
+                        sgx_change_cipher.enc_flags =
+                          s->method->ssl3_enc->enc_flags;
+                        memcpy(&sgx_change_cipher.new_sym_enc,
+                            s->s3->tmp.new_sym_enc, sizeof(EVP_CIPHER));
+                        if(s->s3->tmp.new_hash != NULL){
+                          sgx_change_cipher.mac_sent = 1;
+                          memcpy(&sgx_change_cipher.new_hash,
+                              s->s3->tmp.new_hash, sizeof(EVP_MD));
+                        } else {
+                          sgx_change_cipher.mac_sent = 0;
+                        }
+                        sgx_change_cipher.new_mac_pkey_type =
+                          s->s3->tmp.new_mac_pkey_type;
+                        if(s->s3->tmp.new_aead != NULL){
+                          sgx_change_cipher.aead_sent = 1;
+                          memcpy(&sgx_change_cipher.new_aead,
+                              s->s3->tmp.new_aead, sizeof(EVP_AEAD));
+                        } else {
+                          sgx_change_cipher.aead_sent = 0;
+                        }
+                        memcpy(&sgx_change_cipher.new_cipher,
+                          s->s3->tmp.new_cipher, sizeof(SSL_CIPHER));
+                        sgx_change_cipher.new_mac_secret_size =
+                          s->s3->tmp.new_mac_secret_size;
+
+                        memcpy(&sgx_change_cipher.new_cipher,
+                          s->s3->tmp.new_cipher, sizeof(SSL_CIPHER));
+                        sgx_change_cipher.new_mac_secret_size =
+                          s->s3->tmp.new_mac_secret_size;
+
+                        sgxbridge_pipe_write_cmd(s, CMD_CHANGE_CIPHER_STATE,
+                            sizeof(sgx_change_cipher_st),
+                            (unsigned char *) &sgx_change_cipher);
 
 			if (!s->method->ssl3_enc->change_cipher_state(
 			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
 				ret = -1;
 				goto end;
 			}
+#else
+			if (!s->method->ssl3_enc->change_cipher_state(
+			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
+				ret = -1;
+				goto end;
+			}
+#endif
 
 			break;
 

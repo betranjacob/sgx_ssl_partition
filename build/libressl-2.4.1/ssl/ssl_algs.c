@@ -60,9 +60,10 @@
 
 #include <openssl/lhash.h>
 #include <openssl/objects.h>
-#include <openssl/sgxbridge.h>
 
 #include "ssl_locl.h"
+
+#include <openssl/sgxbridge.h>
 
 int
 SSL_library_init(void)
@@ -128,11 +129,11 @@ SSL_library_init(void)
 	/* initialize cipher/digest methods table */
 	ssl_load_ciphers();
 
-    if (sgxbridge_init() == -1) {
-        fprintf(stderr, "sgxbridge_init() failed __%s__ -__ %s__ \n", __FILE__, __func__);
-        return 0;
-    }
-
+        if (sgxbridge_init() == -1) {
+            fprintf(stderr, "sgxbridge_init() failed __%s__ -__ %s__ \n",
+                __FILE__, __func__);
+            return 0;
+        }
 	return (1);
 }
 
