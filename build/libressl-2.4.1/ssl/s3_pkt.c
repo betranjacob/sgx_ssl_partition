@@ -1308,8 +1308,31 @@ ssl3_do_change_cipher_spec(SSL *s)
 			return (0);
 	}
 
+#ifdef OPENSSL_WITH_SGX
+        int status;
+        sgx_change_cipher_st sgx_change_cipher;
+
+        sgx_change_cipher.which = SSL3_CHANGE_CIPHER_SERVER_READ;
+        sgx_change_cipher.cipher_id = s->session->cipher->id;
+        sgx_change_cipher.version = s->version;
+        sgx_change_cipher.mac_flags = s->mac_flags;
+        sgx_change_cipher.enc_flags =
+          s->method->ssl3_enc->enc_flags;
+
+        printf("do_change_cipher_spec()\n");
+        sgxbridge_pipe_write_cmd(s, CMD_CHANGE_CIPHER_STATE,
+            sizeof(sgx_change_cipher_st),
+            (unsigned char *) &sgx_change_cipher);
+        sgxbridge_pipe_read(sizeof(status), &status);
+
+        if(!status)
+                return (0);
 	if (!s->method->ssl3_enc->change_cipher_state(s, i))
 		return (0);
+#else
+	if (!s->method->ssl3_enc->change_cipher_state(s, i))
+		return (0);
+#endif
 
 	/* we have to record the message digest at
 	 * this point so we can get it before we read

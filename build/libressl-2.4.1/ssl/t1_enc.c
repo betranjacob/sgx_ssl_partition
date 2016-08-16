@@ -568,8 +568,9 @@ tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
 		    !is_read);
 		EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_IV_FIXED,
 		    iv_len, (unsigned char *)iv);
-	} else
+	} else{
 		EVP_CipherInit_ex(cipher_ctx, cipher, NULL, key, iv, !is_read);
+        }
 
 	if (!(EVP_CIPHER_flags(cipher) & EVP_CIPH_FLAG_AEAD_CIPHER)) {
 		EVP_PKEY *mac_key = EVP_PKEY_new_mac_key(mac_type, NULL,
@@ -672,6 +673,16 @@ tls1_change_cipher_state(SSL *s, int which)
 	key_block += iv_len;
 	server_write_iv = key_block;
 	key_block += iv_len;
+
+        printf("mac_secret_size: %d\n", mac_secret_size);
+        printf("key_len: %d\n", key_len);
+        printf("iv_len: %d\n", iv_len);
+        //memset(server_write_key, 0xFF, key_len);
+        //memset(client_write_key, 0xFF, key_len);
+        //memset(server_write_mac_secret, 0xFF, mac_secret_size);
+        //memset(client_write_mac_secret, 0xFF, mac_secret_size);
+        //memset(client_write_iv, 0xFF, iv_len);
+        //memset(server_write_iv, 0xFF, iv_len);
 
 	if (use_client_keys) {
 		mac_secret = client_write_mac_secret;
@@ -785,14 +796,11 @@ tls1_setup_key_block(SSL *s)
                 (unsigned char *) &sgxb);
         sgxbridge_pipe_read(key_block_len, (char *) key_block);
 
-        if(key_block_len == 1)
-            goto err;
+        //if(key_block_len == 1)
+        //    goto err;
 
-        int i;
         fprintf(stdout, "keyblock (%d):\n", key_block_len);
-        for(i = 0; i < key_block_len; i++)
-            fprintf(stdout, "%x", key_block[i]);
-        fprintf(stdout, "\n");
+        print_hex(key_block, key_block_len);
 #else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
@@ -894,6 +902,7 @@ tls1_enc(SSL *s, int send)
 			size_t eivlen = 0;
 			in = rec->input;
 			out = rec->data;
+                        printf("in - out: %p - %p = %p\n", in, out, in - out);
 
 			if (aead->xor_fixed_nonce) {
 				/*
@@ -936,10 +945,25 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+#ifdef OPENSSL_WITH_SGX
+                        printf("Now Sealing...");
+                        if(!sgxbridge_pipe_tls1_enc(s, len, eivlen,
+                            nonce_used, nonce, ad, in, out, &out_len, send))
+                               return -1;
+			//if (!EVP_AEAD_CTX_seal(&aead->ctx,
+			//    out + eivlen, &out_len, len + aead->tag_len, nonce,
+			//    nonce_used, in + eivlen, len, ad, sizeof(ad)))
+			//	return -1;
+
+                        printf("Done\n");
+                        printf("len: %d\n", len);
+                        printf("out_len: %d\n", out_len);
+#else
 			if (!EVP_AEAD_CTX_seal(&aead->ctx,
 			    out + eivlen, &out_len, len + aead->tag_len, nonce,
 			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
 				return -1;
+#endif
 			if (aead->variable_nonce_in_record)
 				out_len += aead->variable_nonce_len;
 		} else {
@@ -989,11 +1013,30 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+#ifdef OPENSSL_WITH_SGX
+                        //char buf_out[40];
+                        //size_t buf_out_len;
+
+                        printf("SSL - Input buffer (%d):", len);
+                        print_hex(in, len);
+                        char buf_out[100];
+                        size_t buf_out_len;
+                        if(!sgxbridge_pipe_tls1_enc(s, len, aead->tag_len,
+                              nonce_used, nonce, ad, in, out, &out_len, send))
+                                return -1;
+                        //if(!sgxbridge_pipe_tls1_enc(s, len, 0,
+                        //    nonce_used, nonce, ad, in, out, &out_len, send))
+                        //        return -1;
+			//if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
+			//    nonce, nonce_used, in, len + aead->tag_len, ad,
+			//    sizeof(ad)))
+			//	return -1;
+#else
 			if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
 			    nonce, nonce_used, in, len + aead->tag_len, ad,
 			    sizeof(ad)))
 				return -1;
-
+#endif
 			rec->data = rec->input = out;
 		}
 

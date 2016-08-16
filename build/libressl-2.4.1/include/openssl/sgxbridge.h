@@ -5,7 +5,7 @@
 #include <openssl/ssl.h>
 #include "../../crypto/evp/evp_locl.h"
 
-#define CMD_MAX_BUF_SIZE 1024
+#define CMD_MAX_BUF_SIZE 1024 * 5
 
 #define CMD_CLNT_RAND 			0x01
 #define CMD_SRV_RAND 			0x02
@@ -20,6 +20,7 @@
 #define CMD_SSL_HANDSHAKE_DONE     	0x0C
 #define CMD_SSL_SESSION_REMOVE   	0x0D
 #define CMD_CHANGE_CIPHER_STATE   	0x0E
+#define CMD_SGX_TLS1_ENC 	        0x0F
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -27,7 +28,7 @@
 int sgxbridge_init();
 int opensgx_pipe_init(int flag_dir);
 int opensgx_pipe_open(char* unique_id, int is_write, int flag_dir);
-void sgxbridge_pipe_read(int len, unsigned char* data);
+ssize_t sgxbridge_pipe_read(size_t len, unsigned char* data);
 void sgxbridge_pipe_write(unsigned char* data, int len);
 void sgxbridge_pipe_write_cmd(SSL* s, int cmd, int len, unsigned char* data);
 void sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id);
@@ -41,6 +42,9 @@ void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,
     int c_size, unsigned char* out, int* size);
 void sgxbridge_ecdhe_generate_pre_master_key(SSL* s, unsigned char* client_pub,
     int k_size);
+int sgxbridge_pipe_tls1_enc(SSL *, size_t, size_t, unsigned int,
+    unsigned char *, unsigned char *, unsigned char *, unsigned char *,
+    size_t *, int);
 
 typedef struct
 {
@@ -68,10 +72,13 @@ typedef struct
 
 typedef struct
 {
+  int which;
+  unsigned long cipher_id;
   int version;
   int mac_flags;
   /* s->method->ssl3_enc->enc_flags */
   unsigned int enc_flags;
+  
   /* s->s3->tmp.new_sym_enc */
   EVP_CIPHER new_sym_enc;
   /* s->s3->tmp.new_hash; */
@@ -89,4 +96,13 @@ typedef struct
 
 } sgx_change_cipher_st;
 
+typedef struct
+{ 
+  size_t len;
+  size_t eivlen;
+  unsigned int nonce_used;
+  int send;
+  unsigned char nonce[16];
+  unsigned char ad[13];
+} sgx_tls1_enc_st;
 #endif /* _SGXBRIDGE_H_ */

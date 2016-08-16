@@ -567,9 +567,11 @@ ssl_cipher_get_evp(const SSL_SESSION *s, const EVP_CIPHER **enc,
 	const SSL_CIPHER *c;
 	int i;
 
+        printf("^^^^^^^^^^^^^^^^^^^3\n");
 	c = s->cipher;
 	if (c == NULL)
 		return (0);
+        printf("^^^^^^^^^^^^^^^^^^^4\n");
 
 	/*
 	 * This function does not handle EVP_AEAD.

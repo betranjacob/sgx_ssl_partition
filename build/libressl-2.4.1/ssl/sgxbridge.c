@@ -62,11 +62,11 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
     }
   }
 
-  int flag = O_ASYNC;
+  int flag;
   if (is_write)
-    flag |= O_WRONLY;
+    flag = O_WRONLY;
   else
-    flag |= O_RDONLY;
+    flag = O_RDONLY;
 
   int fd = open(name_buf, flag);
 
@@ -78,16 +78,28 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
   return fd;
 }
 
-void
-sgxbridge_pipe_read(int len, unsigned char* data)
+ssize_t
+sgxbridge_pipe_read(size_t len, unsigned char* data)
 {
+  size_t num = 0, n;
   int fd = fd_sgx_ssl;
 
 #ifdef SGX_ENCLAVE
   fd = fd_ssl_sgx;
 #endif
 
-  read(fd, data, len);
+  while(num < len){
+    if((n = read(fd, data + num, len)) < 0 ){
+      fprintf(stderr, "SGX read() failed: %s\n", strerror(errno));
+      return -1;
+    } else{
+      num += n;
+    }
+  }
+
+  fprintf(stdout, "SGX read() %d out of %d bytes\n", num, len);
+
+  return num;
 }
 
 void
@@ -99,12 +111,19 @@ sgxbridge_pipe_write(unsigned char* data, int len)
   fd = fd_sgx_ssl;
 #endif
 
-  write(fd, data, len);
+  int num;
+  if((num = write(fd, data, len)) < 0){
+    fprintf(stderr, "SGXBridge write() failed: %s\n", strerror(errno));
+  } else {
+    fprintf(stdout, "written %d out of %d bytes:", num, len);
+    print_hex(data, num);
+  }
 }
 
 void
 sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
 {
+  int num;
   int fd = fd_ssl_sgx;
   cmd_pkt_t cmd_pkt;
 #ifdef SGX_ENCLAVE
@@ -124,12 +143,19 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
       data,
       CMD_MAX_BUF_SIZE - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH);
 
-  write(fd, &cmd_pkt, sizeof(cmd_pkt));
+  if((num = write(fd, &cmd_pkt, sizeof(cmd_pkt_t))) < 0){
+    fprintf(stderr, "SGXBridge write_cmd write() failed: %s\n",
+        strerror(errno));
+  } else {
+    fprintf(stdout, "written %d out of %d bytes:", num, sizeof(cmd_pkt_t));
+    print_hex(data, num);
+  }
 }
 
 void
 sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
 {
+  int num;
   cmd_pkt_t cmd_pkt;
 
   cmd_pkt.cmd = CMD_SSL_SESSION_REMOVE;
@@ -138,7 +164,12 @@ sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
   memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, session_id,
       SSL3_SSL_SESSION_ID_LENGTH);
 
-  write(fd_ssl_sgx, &cmd_pkt, sizeof(cmd_pkt));
+  if((num = write(fd_ssl_sgx, &cmd_pkt, sizeof(cmd_pkt_t))) < 0){
+    fprintf(stderr, "SGXBridge remove_session write() failed: %s\n",
+        strerror(errno));
+  } else {
+    fprintf(stdout, "written %d out of %d bytes:", num, sizeof(cmd_pkt_t));
+  }
 }
 
 int
@@ -174,13 +205,16 @@ sgxbridge_init()
 int
 sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
 {
+  int num;
   int fd = fd_sgx_ssl;
   cmd_pkt_t cmd_pkt;
 #ifdef SGX_ENCLAVE
   fd = fd_ssl_sgx;
 #endif
 
-  if (read(fd, &cmd_pkt, sizeof(cmd_pkt_t)) > 0) {
+  if ((num = read(fd, &cmd_pkt, sizeof(cmd_pkt_t))) > 0) {
+    fprintf(stdout, "read %d out of %d bytes:", num, sizeof(cmd_pkt_t));
+
     *cmd = cmd_pkt.cmd;
     *data_len =
       cmd_pkt.data_len - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH;
@@ -189,8 +223,12 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
     print_hex(data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
         *data_len);
     return 1;
+  } else {
+    fprintf(stderr, "SGXBridge fetch_operation read() failed: %s\n",
+        strerror(errno));
+
+    return 0;
   }
-  return 0;
 }
 
 void
@@ -273,4 +311,37 @@ void sgxbridge_ecdhe_generate_pre_master_key(SSL *s,
 {
     sgxbridge_pipe_write_cmd(s, CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
 
+}
+
+int
+sgxbridge_pipe_tls1_enc(SSL *s, size_t len, size_t eivlen,
+    unsigned int nonce_used, unsigned char *nonce, unsigned char *ad,
+    unsigned char *in, unsigned char *out, size_t *out_len, int send)
+{
+  int sgx_status = 0;
+  unsigned char *tls1_enc_buf;
+  sgx_tls1_enc_st sgx_tls1_enc;
+
+  sgx_tls1_enc.len = len;
+  sgx_tls1_enc.eivlen = eivlen;
+  sgx_tls1_enc.nonce_used = nonce_used;
+  sgx_tls1_enc.send = send;
+  memcpy(sgx_tls1_enc.nonce, nonce, 16);
+  memcpy(sgx_tls1_enc.ad, ad, 13);
+
+  tls1_enc_buf = malloc(
+      sizeof(sgx_tls1_enc_st) + len + eivlen);
+
+  memcpy(tls1_enc_buf, &sgx_tls1_enc, sizeof(sgx_tls1_enc_st));
+
+  // TODO: authentication tag is not passed for the decryption here
+  memcpy(tls1_enc_buf + sizeof(sgx_tls1_enc_st), in, len + eivlen);
+
+  sgxbridge_pipe_write_cmd(s, CMD_SGX_TLS1_ENC,
+      sizeof(sgx_tls1_enc_st) + len + eivlen, tls1_enc_buf);
+  sgxbridge_pipe_read(sizeof(size_t), out_len);
+  sgxbridge_pipe_read(sizeof(int), &sgx_status);
+  sgxbridge_pipe_read(*out_len + eivlen, out);
+
+  return sgx_status;
 }

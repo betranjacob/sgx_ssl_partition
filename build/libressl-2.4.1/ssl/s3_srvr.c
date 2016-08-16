@@ -601,6 +601,7 @@ ssl3_accept(SSL *s)
 		case SSL3_ST_SW_CHANGE_B:
 
 			s->session->cipher = s->s3->tmp.new_cipher;
+                        printf("^^^^^^^^^^^^^^^^^^^^^^^^^^^id:%d\n", s->session->cipher->id);
 
 			if (!s->method->ssl3_enc->setup_key_block(s)) {
 				ret = -1;
@@ -614,44 +615,28 @@ ssl3_accept(SSL *s)
 				goto end;
 			s->state = SSL3_ST_SW_FINISHED_A;
 			s->init_num = 0;
-#if OPENSSL_WITH_SGX
+#ifdef OPENSSL_WITH_SGX
+                        int status;
                         sgx_change_cipher_st sgx_change_cipher;
 
+                        sgx_change_cipher.which =
+                          SSL3_CHANGE_CIPHER_SERVER_WRITE;
+                        sgx_change_cipher.cipher_id = s->session->cipher->id;
                         sgx_change_cipher.version = s->version;
                         sgx_change_cipher.mac_flags = s->mac_flags;
                         sgx_change_cipher.enc_flags =
                           s->method->ssl3_enc->enc_flags;
-                        memcpy(&sgx_change_cipher.new_sym_enc,
-                            s->s3->tmp.new_sym_enc, sizeof(EVP_CIPHER));
-                        if(s->s3->tmp.new_hash != NULL){
-                          sgx_change_cipher.mac_sent = 1;
-                          memcpy(&sgx_change_cipher.new_hash,
-                              s->s3->tmp.new_hash, sizeof(EVP_MD));
-                        } else {
-                          sgx_change_cipher.mac_sent = 0;
-                        }
-                        sgx_change_cipher.new_mac_pkey_type =
-                          s->s3->tmp.new_mac_pkey_type;
-                        if(s->s3->tmp.new_aead != NULL){
-                          sgx_change_cipher.aead_sent = 1;
-                          memcpy(&sgx_change_cipher.new_aead,
-                              s->s3->tmp.new_aead, sizeof(EVP_AEAD));
-                        } else {
-                          sgx_change_cipher.aead_sent = 0;
-                        }
-                        memcpy(&sgx_change_cipher.new_cipher,
-                          s->s3->tmp.new_cipher, sizeof(SSL_CIPHER));
-                        sgx_change_cipher.new_mac_secret_size =
-                          s->s3->tmp.new_mac_secret_size;
-
-                        memcpy(&sgx_change_cipher.new_cipher,
-                          s->s3->tmp.new_cipher, sizeof(SSL_CIPHER));
-                        sgx_change_cipher.new_mac_secret_size =
-                          s->s3->tmp.new_mac_secret_size;
 
                         sgxbridge_pipe_write_cmd(s, CMD_CHANGE_CIPHER_STATE,
                             sizeof(sgx_change_cipher_st),
                             (unsigned char *) &sgx_change_cipher);
+                        sgxbridge_pipe_read(sizeof(status), &status);
+
+			if (!status) {
+                                printf("OOOPS\n");
+				ret = -1;
+				goto end;
+			}
 
 			if (!s->method->ssl3_enc->change_cipher_state(
 			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
@@ -1063,7 +1048,7 @@ ssl3_get_client_hello(SSL *s)
 				    SSL_R_NO_SHARED_CIPHER);
 				goto f_err;
 			}
-
+                        printf("s->session->cipher\n");
 			s->session->cipher = pref_cipher;
 
 			if (s->cipher_list)
@@ -1104,6 +1089,7 @@ ssl3_get_client_hello(SSL *s)
 			goto f_err;
 		}
 		s->s3->tmp.new_cipher = c;
+                printf("s->s3->tmp.new_cipher\n");
 	} else {
 		s->s3->tmp.new_cipher = s->session->cipher;
 	}
