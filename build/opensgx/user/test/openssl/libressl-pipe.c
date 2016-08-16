@@ -149,6 +149,7 @@ register_commands()
   register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
   register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
   register_command(CMD_SSL_SESSION_REMOVE, cmd_ssl_session_remove);
+  register_command(CMD_CHANGE_CIPHER_STATE, cmd_change_cipher_state);
 }
 
 // needs to be called before the command can be used
@@ -428,6 +429,17 @@ cmd_key_block(int data_len, unsigned char* data){
   // if something went wrong, return length of 1 to indicate an error
   sgxbridge_pipe_write((unsigned char *) km, ret ? sgxb->key_block_len : 1);
 
+  // FIXME: size has to be mac_secret_size + key_len + iv_len
+  if ((sgx_sess->s->s3->tmp.key_block =
+        calloc(sgxb->key_block_len, 2)) == NULL) {
+          SSLerr(SSL_F_TLS1_SETUP_KEY_BLOCK, ERR_R_MALLOC_FAILURE);
+          sgx_exit(NULL);
+  }
+  fprintf(stdout, "Storing keyblock in temporary struct...");
+  memcpy(sgx_sess->s->s3->tmp.key_block, km, sgxb->key_block_len);
+  sgx_sess->s->s3->tmp.key_block_length = sgxb->key_block_len;
+  fprintf(stdout, "Done\n");
+
   free(km);
   free(tmp);
 }
@@ -637,5 +649,55 @@ cmd_ssl_session_remove(int data_len, unsigned char *data)
   lh_SGX_SESSION_delete(ssl_sess_lh, sgx_sess);
 
   SSL_free(sgx_sess->s);
+  fprintf(stdout, "Done\n");
+}
+
+void
+cmd_change_cipher_state(int data_len, unsigned char *data)
+{
+  sgx_change_cipher_st *sgx_change_cipher;
+  sgx_change_cipher = (sgx_change_cipher_st *) data;
+
+  fprintf(stdout, "Changing cipher state...");
+  sgx_sess->s->version = sgx_change_cipher->version;
+  sgx_sess->s->mac_flags = sgx_change_cipher->mac_flags;
+  sgx_sess->s->method->ssl3_enc->enc_flags = sgx_change_cipher->enc_flags;
+
+  if((sgx_sess->s->s3->tmp.new_sym_enc =
+        calloc(sizeof(EVP_CIPHER), 1)) == NULL){
+    fprintf(stderr, "SSL EVP_CIPHER calloc() failed: %s\n", strerror(errno));
+    sgx_exit(NULL);
+  }
+  memcpy((void *) sgx_sess->s->s3->tmp.new_sym_enc,
+      &sgx_change_cipher->new_sym_enc, sizeof(EVP_CIPHER));
+
+  if(sgx_change_cipher->mac_sent){
+    if((sgx_sess->s->s3->tmp.new_hash = calloc(sizeof(EVP_MD), 1)) == NULL){
+      fprintf(stderr, "SSL EVP_MD calloc() failed: %s\n", strerror(errno));
+      sgx_exit(NULL);
+    }
+    memcpy((void *) sgx_sess->s->s3->tmp.new_hash,
+        &sgx_change_cipher->new_hash, sizeof(EVP_MD));
+  }
+  sgx_sess->s->s3->tmp.new_mac_pkey_type =
+    sgx_change_cipher->new_mac_pkey_type;
+
+  if(sgx_change_cipher->aead_sent){
+    if((sgx_sess->s->s3->tmp.new_aead = calloc(sizeof(EVP_AEAD), 1)) == NULL){
+      fprintf(stderr, "SSL EVP_AEAD mac calloc() failed: %s\n", strerror(errno));
+      sgx_exit(NULL);
+    }
+    memcpy((void *) sgx_sess->s->s3->tmp.new_aead,
+        &sgx_change_cipher->new_aead, sizeof(EVP_AEAD));
+  }
+  if((sgx_sess->s->s3->tmp.new_cipher = calloc(sizeof(SSL_CIPHER), 1)) == NULL){
+    fprintf(stderr, "SSL_CIPHER calloc() failed: %s\n", strerror(errno));
+    sgx_exit(NULL);
+  }
+  memcpy((void *) sgx_sess->s->s3->tmp.new_cipher,
+      &sgx_change_cipher->new_cipher, sizeof(SSL_CIPHER));
+  sgx_sess->s->s3->tmp.new_mac_secret_size =
+    sgx_change_cipher->new_mac_secret_size;
+
   fprintf(stdout, "Done\n");
 }

@@ -1,7 +1,9 @@
 #ifndef _SGXBRIDGE_H_
 #define _SGXBRIDGE_H_
 
+#include <openssl/evp.h>
 #include <openssl/ssl.h>
+#include "../../crypto/evp/evp_locl.h"
 
 #define CMD_MAX_BUF_SIZE 1024
 
@@ -17,6 +19,7 @@
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
 #define CMD_SSL_HANDSHAKE_DONE     	0x0C
 #define CMD_SSL_SESSION_REMOVE   	0x0D
+#define CMD_CHANGE_CIPHER_STATE   	0x0E
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -62,4 +65,28 @@ typedef struct
   int data_len;
   char data[CMD_MAX_BUF_SIZE];
 } cmd_pkt_t;
+
+typedef struct
+{
+  int version;
+  int mac_flags;
+  /* s->method->ssl3_enc->enc_flags */
+  unsigned int enc_flags;
+  /* s->s3->tmp.new_sym_enc */
+  EVP_CIPHER new_sym_enc;
+  /* s->s3->tmp.new_hash; */
+  int mac_sent;
+  EVP_MD new_hash;
+  /* s->s3->tmp.new_mac_pkey_type; */
+  int new_mac_pkey_type;
+  /* s->s3->tmp.new_mac_secret_size */
+  int new_mac_secret_size;
+  /* s->s3->tmp.new_aead */
+  int aead_sent;
+  EVP_AEAD new_aead;
+
+  SSL_CIPHER new_cipher;
+
+} sgx_change_cipher_st;
+
 #endif /* _SGXBRIDGE_H_ */

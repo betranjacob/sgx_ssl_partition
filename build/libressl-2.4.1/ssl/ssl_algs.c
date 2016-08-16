@@ -132,12 +132,12 @@ SSL_library_init(void)
 	ssl_load_ciphers();
 
 #ifdef OPENSSL_WITH_SGX
-    if (sgxbridge_init() == -1) {
-        fprintf(stderr, "sgxbridge_init() failed __%s__ -__ %s__ \n", __FILE__, __func__);
-        return 0;
-    }
+        if (sgxbridge_init() == -1) {
+            fprintf(stderr, "sgxbridge_init() failed __%s__ -__ %s__ \n",
+                __FILE__, __func__);
+            return 0;
+        }
 #endif
-    
 	return (1);
 }
 
