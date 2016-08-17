@@ -20,6 +20,7 @@
 #define CMD_SSL_HANDSHAKE_DONE     	0x0C
 #define CMD_SSL_SESSION_REMOVE   	0x0D
 #define CMD_CHANGE_CIPHER_STATE   	0x0E
+#define CMD_SGX_SEAL           	        0x0F
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -68,10 +69,12 @@ typedef struct
 
 typedef struct
 {
+  unsigned long cipher_id;
   int version;
   int mac_flags;
   /* s->method->ssl3_enc->enc_flags */
   unsigned int enc_flags;
+  
   /* s->s3->tmp.new_sym_enc */
   EVP_CIPHER new_sym_enc;
   /* s->s3->tmp.new_hash; */
@@ -89,4 +92,12 @@ typedef struct
 
 } sgx_change_cipher_st;
 
+typedef struct
+{ 
+  size_t buf_len;
+  unsigned char ad[13];
+  unsigned char nonce[16];
+  unsigned int nonce_used;
+  size_t eivlen;
+} sgx_tls1_enc_st;
 #endif /* _SGXBRIDGE_H_ */

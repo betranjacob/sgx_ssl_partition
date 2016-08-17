@@ -150,6 +150,7 @@ register_commands()
   register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
   register_command(CMD_SSL_SESSION_REMOVE, cmd_ssl_session_remove);
   register_command(CMD_CHANGE_CIPHER_STATE, cmd_change_cipher_state);
+  register_command(CMD_SGX_SEAL, cmd_sgx_seal);
 }
 
 // needs to be called before the command can be used
@@ -635,54 +636,93 @@ cmd_ssl_session_remove(int data_len, unsigned char *data)
 void
 cmd_change_cipher_state(int data_len, unsigned char *data)
 {
-  int status;
+  int mac_type = NID_undef, mac_secret_size = 0, status;
+
   sgx_change_cipher_st *sgx_change_cipher;
   sgx_change_cipher = (sgx_change_cipher_st *) data;
 
-  fprintf(stdout, "Changing cipher state...");
+  fprintf(stdout, "Changing cipher state (%d)...", sgx_change_cipher->cipher_id);
   sgx_sess->s->version = sgx_change_cipher->version;
   sgx_sess->s->mac_flags = sgx_change_cipher->mac_flags;
   sgx_sess->s->method->ssl3_enc->enc_flags = sgx_change_cipher->enc_flags;
+  sgx_sess->s->s3->tmp.new_cipher =
+    ssl3_get_cipher_by_id(sgx_change_cipher->cipher_id);
+  sgx_sess->s->session->cipher = sgx_sess->s->s3->tmp.new_cipher;
 
-  if((sgx_sess->s->s3->tmp.new_sym_enc =
-        calloc(sizeof(EVP_CIPHER), 1)) == NULL){
-    fprintf(stderr, "SSL EVP_CIPHER calloc() failed: %s\n", strerror(errno));
-    sgx_exit(NULL);
-  }
-  memcpy((void *) sgx_sess->s->s3->tmp.new_sym_enc,
-      &sgx_change_cipher->new_sym_enc, sizeof(EVP_CIPHER));
+  if (sgx_sess->s->session->cipher &&
+      (sgx_sess->s->session->cipher->algorithm2 & SSL_CIPHER_ALGORITHM2_AEAD)) {
+    fprintf(stdout, "kokolala\n");
 
-  if(sgx_change_cipher->mac_sent){
-    if((sgx_sess->s->s3->tmp.new_hash = calloc(sizeof(EVP_MD), 1)) == NULL){
-      fprintf(stderr, "SSL EVP_MD calloc() failed: %s\n", strerror(errno));
-      sgx_exit(NULL);
+    if (!ssl_cipher_get_evp_aead(sgx_sess->s->session,
+          &sgx_sess->s->s3->tmp.new_aead)) {
+          SSLerr(SSL_F_TLS1_SETUP_KEY_BLOCK,
+              SSL_R_CIPHER_OR_HASH_UNAVAILABLE);
+          sgx_exit(NULL);
     }
-    memcpy((void *) sgx_sess->s->s3->tmp.new_hash,
-        &sgx_change_cipher->new_hash, sizeof(EVP_MD));
-  }
-  sgx_sess->s->s3->tmp.new_mac_pkey_type =
-    sgx_change_cipher->new_mac_pkey_type;
+  } else {
 
-  if(sgx_change_cipher->aead_sent){
-    if((sgx_sess->s->s3->tmp.new_aead = calloc(sizeof(EVP_AEAD), 1)) == NULL){
-      fprintf(stderr, "SSL EVP_AEAD mac calloc() failed: %s\n", strerror(errno));
-      sgx_exit(NULL);
+    fprintf(stdout, "kokolala1\n");
+
+    if (!ssl_cipher_get_evp(sgx_sess->s->session,
+          &sgx_sess->s->s3->tmp.new_sym_enc,
+          &sgx_sess->s->s3->tmp.new_hash,
+          &mac_type, &mac_secret_size)) {
+            SSLerr(SSL_F_TLS1_SETUP_KEY_BLOCK,
+                SSL_R_CIPHER_OR_HASH_UNAVAILABLE);
+            sgx_exit(NULL);
     }
-    memcpy((void *) sgx_sess->s->s3->tmp.new_aead,
-        &sgx_change_cipher->new_aead, sizeof(EVP_AEAD));
   }
-  if((sgx_sess->s->s3->tmp.new_cipher = calloc(sizeof(SSL_CIPHER), 1)) == NULL){
-    fprintf(stderr, "SSL_CIPHER calloc() failed: %s\n", strerror(errno));
-    sgx_exit(NULL);
-  }
-  memcpy((void *) sgx_sess->s->s3->tmp.new_cipher,
-      &sgx_change_cipher->new_cipher, sizeof(SSL_CIPHER));
-  sgx_sess->s->s3->tmp.new_mac_secret_size =
-    sgx_change_cipher->new_mac_secret_size;
+
+//  if (!ssl_cipher_get_evp(sgx_sess->s->session,
+//        &sgx_sess->s->s3->tmp.new_sym_enc,
+//        &sgx_sess->s->s3->tmp.new_hash,
+//        &mac_type, &mac_secret_size)) {
+//          SSLerr(SSL_F_TLS1_SETUP_KEY_BLOCK,
+//              SSL_R_CIPHER_OR_HASH_UNAVAILABLE);
+//          fprintf(stdout, "kokolala");
+//          //sgx_exit(NULL);
+//  }
+
+  sgx_sess->s->s3->tmp.new_mac_pkey_type = mac_type;
+  sgx_sess->s->s3->tmp.new_mac_secret_size = mac_secret_size;
 
   status = tls1_change_cipher_state(
       sgx_sess->s, SSL3_CHANGE_CIPHER_SERVER_WRITE);
-  sgxbridge_pipe_write(status, sizeof(status));
+  sgxbridge_pipe_write((unsigned char *) &status, sizeof(status));
 
+  fprintf(stdout, "Done\n");
+}
+
+void
+cmd_sgx_seal(int data_len, unsigned char *data)
+{
+
+  const SSL_AEAD_CTX *aead;
+  unsigned char *out, *buf;
+  size_t out_len;
+
+  sgx_tls1_enc_st *sgx_tls1_enc;
+  sgx_tls1_enc = (sgx_tls1_enc_st *) data;
+  
+  fprintf(stdout, "Sealing data (%d)...\n", sgx_tls1_enc->buf_len);
+  out = malloc(256); // ?????
+
+  aead = sgx_sess->s->aead_write_ctx;
+  fprintf(stdout, "koko: %p\n", aead);
+
+  if (!EVP_AEAD_CTX_seal(&aead->ctx,
+      out + sgx_tls1_enc->eivlen,
+      &out_len, sgx_tls1_enc->buf_len + aead->tag_len,
+      sgx_tls1_enc->nonce, sgx_tls1_enc->nonce_used,
+      data + sizeof(sgx_tls1_enc) + sgx_tls1_enc->eivlen,
+      sgx_tls1_enc->buf_len, sgx_tls1_enc->ad, sizeof(sgx_tls1_enc->ad)))
+          return -1;
+//
+//  fprintf(stdout, "out_len: %d\n", out_len);
+//  buf = malloc(sizeof(size_t) + out_len);
+//  memcpy(buf, &out_len, sizeof(size_t));
+//  memcpy(buf + out_len, out, out_len);
+//
+//  sgxbridge_pipe_write(buf, sizeof(size_t) + out_len);
   fprintf(stdout, "Done\n");
 }

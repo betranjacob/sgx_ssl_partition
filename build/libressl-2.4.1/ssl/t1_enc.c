@@ -537,13 +537,11 @@ tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
 			goto err;
 		s->read_hash = mac_ctx;
 	} else {
-                printf("kokolala9\n");
 		if (s->s3->tmp.new_cipher->algorithm2 & TLS1_STREAM_MAC)
 			s->mac_flags |= SSL_MAC_FLAG_WRITE_MAC_STREAM;
 		else
 			s->mac_flags &= ~SSL_MAC_FLAG_WRITE_MAC_STREAM;
 
-                printf("kokolala10\n");
 		/*
 		 * DTLS fragments retain a pointer to the compression, cipher
 		 * and hash contexts, so that it can restore state in order
@@ -557,30 +555,23 @@ tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
 			EVP_MD_CTX_destroy(s->write_hash);
 			s->write_hash = NULL;
 		}
-                printf("kokolala11\n");
 		if ((cipher_ctx = EVP_CIPHER_CTX_new()) == NULL)
 			goto err;
 		s->enc_write_ctx = cipher_ctx;
 		if ((mac_ctx = EVP_MD_CTX_create()) == NULL)
 			goto err;
-                printf("kokolala12\n");
 		s->write_hash = mac_ctx;
 	}
 
 	if (EVP_CIPHER_mode(cipher) == EVP_CIPH_GCM_MODE) {
-                printf("kokolala12-1\n");
 		EVP_CipherInit_ex(cipher_ctx, cipher, NULL, key, NULL,
 		    !is_read);
-                printf("kokolala12-2\n");
 		EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_IV_FIXED,
 		    iv_len, (unsigned char *)iv);
-                printf("kokolala12-3\n");
 	} else{
-                printf("kokolala12-4\n");
 		EVP_CipherInit_ex(cipher_ctx, cipher, NULL, key, iv, !is_read);
         }
 
-        printf("kokolala13\n");
 	if (!(EVP_CIPHER_flags(cipher) & EVP_CIPH_FLAG_AEAD_CIPHER)) {
 		EVP_PKEY *mac_key = EVP_PKEY_new_mac_key(mac_type, NULL,
 		    mac_secret, mac_secret_size);
@@ -593,7 +584,6 @@ tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
 		EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_AEAD_SET_MAC_KEY,
 		    mac_secret_size, (unsigned char *)mac_secret);
 	}
-        printf("kokolala14\n");
 
 	if (s->s3->tmp.new_cipher->algorithm_enc == SSL_eGOST2814789CNT) {
 		int nid;
@@ -602,7 +592,6 @@ tls1_change_cipher_state_cipher(SSL *s, char is_read, char use_client_keys,
 		else
 			nid = NID_id_tc26_gost_28147_param_Z;
 
-                printf("kokolala15\n");
 		EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GOST_SET_SBOX, nid, 0);
 		if (s->s3->tmp.new_cipher->algorithm_mac == SSL_GOST89MAC)
 			EVP_MD_CTX_ctrl(mac_ctx, EVP_MD_CTRL_GOST_SET_SBOX, nid, 0);
@@ -629,7 +618,6 @@ tls1_change_cipher_state(SSL *s, int which)
 	char is_read, use_client_keys;
 
 
-        printf("kokolala\n");
 	cipher = s->s3->tmp.new_sym_enc;
 	aead = s->s3->tmp.new_aead;
 
@@ -649,7 +637,6 @@ tls1_change_cipher_state(SSL *s, int which)
 	    (which == SSL3_CHANGE_CIPHER_SERVER_READ));
 
 
-        printf("kokolala1\n");
 	/*
 	 * Reset sequence number to zero - for DTLS this is handled in
 	 * dtls1_reset_seq_numbers().
@@ -659,13 +646,10 @@ tls1_change_cipher_state(SSL *s, int which)
 		memset(seq, 0, SSL3_SEQUENCE_SIZE);
 	}
 
-        printf("kokolala2\n");
 	if (aead != NULL) {
-                printf("kokolala3-1\n");
 		key_len = EVP_AEAD_key_length(aead);
 		iv_len = SSL_CIPHER_AEAD_FIXED_NONCE_LEN(s->s3->tmp.new_cipher);
 	} else {
-                printf("kokolala3-2\n");
 		key_len = EVP_CIPHER_key_length(cipher);
 		iv_len = EVP_CIPHER_iv_length(cipher);
 
@@ -674,7 +658,6 @@ tls1_change_cipher_state(SSL *s, int which)
 			iv_len = EVP_GCM_TLS_FIXED_IV_LEN;
 	}
 
-        printf("kokolala4\n");
 	mac_secret_size = s->s3->tmp.new_mac_secret_size;
 
 	key_block = s->s3->tmp.key_block;
@@ -691,7 +674,6 @@ tls1_change_cipher_state(SSL *s, int which)
 	server_write_iv = key_block;
 	key_block += iv_len;
 
-        printf("kokolala5\n");
 	if (use_client_keys) {
 		mac_secret = client_write_mac_secret;
 		key = client_write_key;
@@ -706,7 +688,6 @@ tls1_change_cipher_state(SSL *s, int which)
 		SSLerr(SSL_F_TLS1_CHANGE_CIPHER_STATE, ERR_R_INTERNAL_ERROR);
 		goto err2;
 	}
-        printf("kokolala6\n");
 
 	if (is_read) {
 		memcpy(s->s3->read_mac_secret, mac_secret, mac_secret_size);
@@ -716,13 +697,11 @@ tls1_change_cipher_state(SSL *s, int which)
 		s->s3->write_mac_secret_size = mac_secret_size;
 	}
 
-        printf("kokolala7\n");
 	if (aead != NULL) {
 		return tls1_change_cipher_state_aead(s, is_read, key, key_len,
 		    iv, iv_len);
 	}
 
-        printf("kokolala8\n");
 	return tls1_change_cipher_state_cipher(s, is_read, use_client_keys,
 	    mac_secret, mac_secret_size, key, key_len, iv, iv_len);
 
@@ -958,10 +937,44 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+#ifdef OPENSSL_WITH_SGX
+                        unsigned char *tls1_enc_buf, *buf;
+                        sgx_tls1_enc_st sgx_tls1_enc;
+
+                        tls1_enc_buf = malloc(sizeof(sgx_tls1_enc) + len);
+                        buf = malloc(len);
+                        memcpy(buf, in, len);
+
+                        sgx_tls1_enc.buf_len = len;
+                        memcpy(sgx_tls1_enc.nonce, nonce, 16);
+                        sgx_tls1_enc.nonce_used = nonce_used;
+                        sgx_tls1_enc.eivlen = eivlen;
+                        memcpy(sgx_tls1_enc.ad, ad, sizeof(ad));
+
+                        memcpy(tls1_enc_buf, buf, len);
+                        memcpy(tls1_enc_buf + len, &sgx_tls1_enc,
+                            sizeof(sgx_tls1_enc));
+
+                        sgxbridge_pipe_write_cmd(s, CMD_SGX_SEAL,
+                            sizeof(sgx_tls1_enc) + len, tls1_enc_buf);
+
+                        sgxbridge_pipe_read(sizeof(size_t), &out_len);
+                        sgxbridge_pipe_read(out_len, out);
+                        printf("SGX_SEAL (%d):", out_len);
+                        print_hex(out, out_len);
+
 			if (!EVP_AEAD_CTX_seal(&aead->ctx,
 			    out + eivlen, &out_len, len + aead->tag_len, nonce,
 			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
 				return -1;
+                        printf("LIBRESSL_SEAL (%d):", out_len);
+                        print_hex(out, out_len);
+#else
+			if (!EVP_AEAD_CTX_seal(&aead->ctx,
+			    out + eivlen, &out_len, len + aead->tag_len, nonce,
+			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
+				return -1;
+#endif
 			if (aead->variable_nonce_in_record)
 				out_len += aead->variable_nonce_len;
 		} else {
