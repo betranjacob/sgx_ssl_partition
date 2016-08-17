@@ -48,7 +48,7 @@ print_finish() {
 	echo "which are available at /etc/nginx-default";
 }
 
-build_nginx() {
+build_libressl() {
 	# build static LibreSSL
 	echo "Configure & Build LibreSSL"
 	
@@ -60,7 +60,9 @@ build_nginx() {
 
 	#no strip for callgrind
 	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+}
 
+build_nginx() {
 	# build nginx, with various modules included/excluded
 	echo "Configure & Build Nginx"
 	cd $BPATH/$VERSION_NGINX
@@ -227,6 +229,7 @@ case "$1" in
 	download_sources
     ;;
   -n|--nginx)
+	build_libressl
 	build_nginx
 	build_libressl_sgx
   ;;
@@ -236,9 +239,23 @@ case "$1" in
   -s|--sgx)
     build_opensgx
   ;;
+  -l)
+	build_libressl
+  ;;
+  --ll)
+	echo "Copying changed libressl files"
+	$RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/opensgx/libsgx/libressl/crypto/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/opensgx/libsgx/libressl/ssl/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/opensgx/libsgx/libressl/include/openssl/
+	
+	build_libressl
+	build_libressl_sgx
+  ;;
   -g|--git)
     install_dependencies
     build_opensgx
+    buold_libressl
     build_nginx
     prepare_fresh
     build_libressl_sgx
