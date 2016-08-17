@@ -703,26 +703,37 @@ cmd_sgx_seal(int data_len, unsigned char *data)
 
   sgx_tls1_enc_st *sgx_tls1_enc;
   sgx_tls1_enc = (sgx_tls1_enc_st *) data;
-  
-  fprintf(stdout, "Sealing data (%d)...\n", sgx_tls1_enc->buf_len);
-  out = malloc(256); // ?????
+
+  fprintf(stdout, "SGX SEAL-in (%d) :", sgx_tls1_enc->len + sgx_tls1_enc->eivlen);
+  print_hex(data + sizeof(sgx_tls1_enc_st), sgx_tls1_enc->len + sgx_tls1_enc->eivlen);
+
+  if((out = calloc(256, 1)) == NULL){
+    fprintf(stderr, "SGX seal() malloc failed: %s\n", strerror(errno));
+    sgx_exit(NULL);
+  }
 
   aead = sgx_sess->s->aead_write_ctx;
-  fprintf(stdout, "koko: %p\n", aead);
 
   if (!EVP_AEAD_CTX_seal(&aead->ctx,
       out + sgx_tls1_enc->eivlen,
-      &out_len, sgx_tls1_enc->buf_len + aead->tag_len,
-      sgx_tls1_enc->nonce, sgx_tls1_enc->nonce_used,
-      data + sizeof(sgx_tls1_enc) + sgx_tls1_enc->eivlen,
-      sgx_tls1_enc->buf_len, sgx_tls1_enc->ad, sizeof(sgx_tls1_enc->ad)))
-          return -1;
-//
-//  fprintf(stdout, "out_len: %d\n", out_len);
-//  buf = malloc(sizeof(size_t) + out_len);
-//  memcpy(buf, &out_len, sizeof(size_t));
-//  memcpy(buf + out_len, out, out_len);
-//
-//  sgxbridge_pipe_write(buf, sizeof(size_t) + out_len);
+      &out_len,
+      sgx_tls1_enc->len + aead->tag_len,
+      sgx_tls1_enc->nonce,
+      sgx_tls1_enc->nonce_used,
+      data + sizeof(sgx_tls1_enc_st) + sgx_tls1_enc->eivlen,
+      sgx_tls1_enc->len,
+      sgx_tls1_enc->ad,
+      sizeof(sgx_tls1_enc->ad))){
+
+    sgx_exit(NULL);
+  }
+  fprintf(stdout, "SGX SEAL-out (%d):", out_len + sgx_tls1_enc->eivlen);
+  print_hex(out, out_len + sgx_tls1_enc->eivlen);
+
+  buf = malloc(sizeof(size_t) + out_len + sgx_tls1_enc->eivlen);
+  memcpy(buf, &out_len, sizeof(size_t));
+  memcpy(buf + sizeof(size_t), out, out_len + sgx_tls1_enc->eivlen);
+
+  sgxbridge_pipe_write(buf, sizeof(size_t) + out_len + sgx_tls1_enc->eivlen);
   fprintf(stdout, "Done\n");
 }

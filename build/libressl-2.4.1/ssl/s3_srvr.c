@@ -615,7 +615,7 @@ ssl3_accept(SSL *s)
 				goto end;
 			s->state = SSL3_ST_SW_FINISHED_A;
 			s->init_num = 0;
-#if OPENSSL_WITH_SGX
+#ifdef OPENSSL_WITH_SGX
                         int status;
                         sgx_change_cipher_st sgx_change_cipher;
 

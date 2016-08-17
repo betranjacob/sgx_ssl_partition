@@ -94,10 +94,12 @@ typedef struct
 
 typedef struct
 { 
-  size_t buf_len;
-  unsigned char ad[13];
-  unsigned char nonce[16];
-  unsigned int nonce_used;
+  size_t len;
   size_t eivlen;
+  unsigned int nonce_used;
+  unsigned char foo[4];
+  unsigned char nonce[16];
+  unsigned char ad[13];
+  unsigned char foo1[3];
 } sgx_tls1_enc_st;
 #endif /* _SGXBRIDGE_H_ */

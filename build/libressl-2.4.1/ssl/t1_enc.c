@@ -938,37 +938,38 @@ tls1_enc(SSL *s, int send)
 			ad[12] = len & 0xff;
 
 #ifdef OPENSSL_WITH_SGX
-                        unsigned char *tls1_enc_buf, *buf;
+                        unsigned char *tls1_enc_buf;
                         sgx_tls1_enc_st sgx_tls1_enc;
 
-                        tls1_enc_buf = malloc(sizeof(sgx_tls1_enc) + len);
-                        buf = malloc(len);
-                        memcpy(buf, in, len);
-
-                        sgx_tls1_enc.buf_len = len;
-                        memcpy(sgx_tls1_enc.nonce, nonce, 16);
+                        sgx_tls1_enc.len = len;
                         sgx_tls1_enc.nonce_used = nonce_used;
                         sgx_tls1_enc.eivlen = eivlen;
+                        memcpy(sgx_tls1_enc.nonce, nonce, 16);
                         memcpy(sgx_tls1_enc.ad, ad, sizeof(ad));
 
-                        memcpy(tls1_enc_buf, buf, len);
-                        memcpy(tls1_enc_buf + len, &sgx_tls1_enc,
-                            sizeof(sgx_tls1_enc));
+                        tls1_enc_buf = malloc(sizeof(sgx_tls1_enc_st) + len + eivlen);
 
+                        memcpy(tls1_enc_buf, &sgx_tls1_enc,
+                            sizeof(sgx_tls1_enc_st));
+                        memcpy(tls1_enc_buf + sizeof(sgx_tls1_enc_st), in, len + eivlen);
+                        printf("LIBRESSL_SEAL (in-%d):", len + eivlen);
+                        print_hex(in, len + eivlen);
                         sgxbridge_pipe_write_cmd(s, CMD_SGX_SEAL,
-                            sizeof(sgx_tls1_enc) + len, tls1_enc_buf);
+                            sizeof(sgx_tls1_enc_st) + len + eivlen, tls1_enc_buf);
 
+//                        char *buf1;
+//                        buf1 = calloc(40, 1);
                         sgxbridge_pipe_read(sizeof(size_t), &out_len);
-                        sgxbridge_pipe_read(out_len, out);
-                        printf("SGX_SEAL (%d):", out_len);
-                        print_hex(out, out_len);
-
-			if (!EVP_AEAD_CTX_seal(&aead->ctx,
-			    out + eivlen, &out_len, len + aead->tag_len, nonce,
-			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
-				return -1;
-                        printf("LIBRESSL_SEAL (%d):", out_len);
-                        print_hex(out, out_len);
+                        sgxbridge_pipe_read(out_len + eivlen, out);
+                        printf("SGX_SEAL (out-%d):", out_len + eivlen);
+                        print_hex(out, out_len + eivlen);
+//                        memset(out + eivlen, 0, out_len);
+//			if (!EVP_AEAD_CTX_seal(&aead->ctx,
+//			    out + eivlen, &out_len, len + aead->tag_len, nonce,
+//			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
+//				return -1;
+//                        printf("LIBRESSL_SEAL (out-%d):", out_len + eivlen);
+//                        print_hex(out, out_len + eivlen);
 #else
 			if (!EVP_AEAD_CTX_seal(&aead->ctx,
 			    out + eivlen, &out_len, len + aead->tag_len, nonce,
