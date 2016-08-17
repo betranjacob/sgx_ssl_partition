@@ -42,6 +42,9 @@ void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,
     int c_size, unsigned char* out, int* size);
 void sgxbridge_ecdhe_generate_pre_master_key(SSL* s, unsigned char* client_pub,
     int k_size);
+int sgxbridge_pipe_tls1_enc_aead(SSL *, size_t, size_t, unsigned int,
+    unsigned char *, unsigned char *, unsigned char *, unsigned char *,
+    size_t *, int);
 
 typedef struct
 {

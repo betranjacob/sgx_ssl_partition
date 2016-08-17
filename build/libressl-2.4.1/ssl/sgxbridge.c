@@ -274,3 +274,35 @@ void sgxbridge_ecdhe_generate_pre_master_key(SSL *s,
     sgxbridge_pipe_write_cmd(s, CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
 
 }
+
+int
+sgxbridge_pipe_tls1_enc_aead(SSL *s, size_t len, size_t eivlen,
+    unsigned int nonce_used, unsigned char *nonce, unsigned char *ad,
+    unsigned char *in, unsigned char *out, size_t *out_len, int send)
+{
+  int sgx_status = 0;
+  unsigned char *tls1_enc_buf;
+  sgx_tls1_enc_st sgx_tls1_enc;
+
+  sgx_tls1_enc.len = len;
+  sgx_tls1_enc.eivlen = eivlen;
+  sgx_tls1_enc.nonce_used = nonce_used;
+  memcpy(sgx_tls1_enc.nonce, nonce, 16);
+  memcpy(sgx_tls1_enc.ad, ad, 13);
+
+  tls1_enc_buf = malloc(
+      sizeof(sgx_tls1_enc_st) + len + eivlen);
+
+  memcpy(tls1_enc_buf, &sgx_tls1_enc,
+      sizeof(sgx_tls1_enc_st));
+  memcpy(tls1_enc_buf + sizeof(sgx_tls1_enc_st),
+      in, len + eivlen);
+
+  sgxbridge_pipe_write_cmd(s, CMD_SGX_SEAL,
+      sizeof(sgx_tls1_enc_st) + len + eivlen, tls1_enc_buf);
+  sgxbridge_pipe_read(sizeof(size_t), out_len);
+  sgxbridge_pipe_read(sizeof(int), &sgx_status);
+  sgxbridge_pipe_read(*out_len + eivlen, out);
+
+  return sgx_status;
+}

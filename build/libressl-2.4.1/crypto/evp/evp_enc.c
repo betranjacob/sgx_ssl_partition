@@ -98,7 +98,6 @@ int
 EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
     const unsigned char *key, const unsigned char *iv, int enc)
 {
-        printf("kokolala12-4-1\n");
 	if (enc == -1)
 		enc = ctx->encrypt;
 	else {
@@ -106,7 +105,6 @@ EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
 			enc = 1;
 		ctx->encrypt = enc;
 	}
-        printf("kokolala12-5\n");
 #ifndef OPENSSL_NO_ENGINE
 	/* Whether it's nice or not, "Inits" can be used on "Final"'d contexts
 	 * so this context may already have an ENGINE! Try to avoid releasing
@@ -116,7 +114,6 @@ EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
 	    (!cipher || (cipher && (cipher->nid == ctx->cipher->nid))))
 		goto skip_to_init;
 #endif
-        printf("kokolala12-6\n");
 	if (cipher) {
 		/* Ensure a context left lying around from last time is cleared
 		 * (the previous check attempted to avoid this if the same
@@ -157,7 +154,6 @@ EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
 			ctx->engine = NULL;
 #endif
 
-                printf("kokolala12-7\n");
 		ctx->cipher = cipher;
 		if (ctx->cipher->ctx_size) {
 			ctx->cipher_data = malloc(ctx->cipher->ctx_size);
@@ -182,7 +178,6 @@ EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher, ENGINE *impl,
 		EVPerr(EVP_F_EVP_CIPHERINIT_EX, EVP_R_NO_CIPHER_SET);
 		return 0;
 	}
-        printf("kokolala12-8\n");
 #ifndef OPENSSL_NO_ENGINE
 skip_to_init:
 #endif
