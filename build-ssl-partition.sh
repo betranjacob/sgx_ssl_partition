@@ -267,6 +267,12 @@ case "$1" in
 	build_libressl_sgx
   ;;
   --lt)
+	echo "Copying changed libressl files"
+	$RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/busywait/libressl/crypto/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/busywait/libressl/ssl/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/busywait/libressl/include/openssl/
+	
 	build_libressl_busywait
   ;;
   -g|--git)
