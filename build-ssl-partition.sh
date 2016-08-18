@@ -22,6 +22,7 @@ export SOURCE_OPENSGX=https://github.com/sslab-gatech/opensgx.git
 # set where LibreSSL and nginx will be built
 export BPATH=$(pwd)/build
 export STATICLIBSSL=$BPATH/$VERSION_LIBRESSL
+export LIBSSL_TEST=$BPATH/busywait/libressl
 
 # TODO: 
 print_usage() {
@@ -155,11 +156,11 @@ build_libressl_busywait() {
 	echo "Configure & Build LibreSSL for busywait"
 
 	# cd $STATICLIBSSL
-	cd $BPATH/busywait/libressl
+	cd $LIBSSL_TEST
 	aclocal
         automake
 	autoconf
-	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ --host="x86_64-linux" && make -j $NB_PROC
+	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --prefix=${LIBSSL_TEST}/.openssl/ --host="x86_64-linux" && make -j $NB_PROC
 
 	cd $BPATH
 	cd ..
@@ -272,7 +273,7 @@ case "$1" in
 	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/busywait/libressl/crypto/
 	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/busywait/libressl/ssl/
 	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/busywait/libressl/include/openssl/
-	
+
 	build_libressl_busywait
   ;;
   -g|--git)
