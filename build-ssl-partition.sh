@@ -158,6 +158,8 @@ build_libressl_busywait() {
 	rm -rf busywait/libressl/
 	rm -f busywait/libressl-pipe
 	cp -r libressl-2.4.1/ $LIBSSL_TEST/
+	cp opensgx/user/test/openssl/libressl-pipe.c busywait
+	cp opensgx/user/test/openssl/libressl-pipe.h busywait
 
 	cd $LIBSSL_TEST
 	make clean
