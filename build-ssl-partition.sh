@@ -48,7 +48,7 @@ print_finish() {
 	echo "which are available at /etc/nginx-default";
 }
 
-build_nginx() {
+build_libressl() {
 	# build static LibreSSL
 	echo "Configure & Build LibreSSL"
 	
@@ -59,17 +59,20 @@ build_nginx() {
 	echo $(pwd)
 
 	#no strip for callgrind
-	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+}
 
+build_nginx() {
 	# build nginx, with various modules included/excluded
 	echo "Configure & Build Nginx"
 	cd $BPATH/$VERSION_NGINX
 
 	mkdir -p $BPATH/nginx
 	./configure  --with-openssl=$STATICLIBSSL \
+        --with-openssl-opt='--enable-sgx --prefix=${STATICLIBSSL}/.openssl' \
 	--with-debug \
 	--with-ld-opt="-lrt"  \
-	--with-cc-opt='-O0 -g' \
+	--with-cc-opt='-O0 -g -DOPENSSL_WITH_SGX' \
 	--sbin-path=/usr/sbin/nginx \
 	--conf-path=/etc/nginx/nginx.conf \
 	--error-log-path=$NGINX_LOG_DIR/error.log \
@@ -142,7 +145,7 @@ build_libressl_sgx() {
 	aclocal
         automake
 	autoconf
-	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-shared=no && make -j $NB_PROC
+	./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" --enable-sgx --enable-shared=no && make -j $NB_PROC
 
 	cd $BPATH
 	cd ..
@@ -226,6 +229,7 @@ case "$1" in
 	download_sources
     ;;
   -n|--nginx)
+	build_libressl
 	build_nginx
 	build_libressl_sgx
   ;;
@@ -235,9 +239,23 @@ case "$1" in
   -s|--sgx)
     build_opensgx
   ;;
+  -l)
+	build_libressl
+  ;;
+  --ll)
+	echo "Copying changed libressl files"
+	$RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/opensgx/libsgx/libressl/crypto/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/opensgx/libsgx/libressl/ssl/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/opensgx/libsgx/libressl/include/openssl/
+	
+	build_libressl
+	build_libressl_sgx
+  ;;
   -g|--git)
     install_dependencies
     build_opensgx
+    buold_libressl
     build_nginx
     prepare_fresh
     build_libressl_sgx

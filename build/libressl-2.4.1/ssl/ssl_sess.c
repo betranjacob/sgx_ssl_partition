@@ -141,6 +141,10 @@
 #include <openssl/engine.h>
 #endif
 
+#ifdef OPENSSL_WITH_SGX
+#include <openssl/sgxbridge.h>
+#endif
+
 #include "ssl_locl.h"
 
 static void SSL_SESSION_list_remove(SSL_CTX *ctx, SSL_SESSION *s);
@@ -648,6 +652,9 @@ SSL_CTX_add_session(SSL_CTX *ctx, SSL_SESSION *c)
 int
 SSL_CTX_remove_session(SSL_CTX *ctx, SSL_SESSION *c)
 {
+#ifdef OPENSSL_WITH_SGX
+        sgxbridge_pipe_write_cmd_remove_session(c->session_id);
+#endif
 	return remove_session_lock(ctx, c, 1);
 }
 

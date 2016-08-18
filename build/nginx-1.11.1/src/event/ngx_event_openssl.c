@@ -11,6 +11,9 @@
 
 #define NGX_SSL_PASSWORD_BUFFER_SIZE  4096
 
+#ifdef OPENSSL_WITH_SGX
+#include <openssl/sgxbridge.h>
+#endif
 
 typedef struct {
     ngx_uint_t  engine;   /* unsigned  engine:1; */
@@ -771,7 +774,6 @@ ngx_ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
 static void
 ngx_ssl_info_callback(const ngx_ssl_conn_t *ssl_conn, int where, int ret)
 {
-    printf("ngx_ssl_info_callback\n");
     BIO               *rbio, *wbio;
     ngx_connection_t  *c;
 
@@ -1137,6 +1139,15 @@ ngx_ssl_create_connection(ngx_ssl_t *ssl, ngx_connection_t *c, ngx_uint_t flags)
     }
 
     c->ssl = sc;
+
+#ifdef OPENSSL_WITH_SGX
+    RAND_bytes(sc->connection->sgx_session_id, SGX_SESSION_ID_LENGTH);
+    fprintf(stdout, "SGX sgx_session_id set: ");
+    int i;
+    for(i = 0; i < SGX_SESSION_ID_LENGTH; i++)
+      fprintf(stdout, "%x", sc->connection->sgx_session_id[i]);
+    fprintf(stdout, "\n");
+#endif
 
     return NGX_OK;
 }

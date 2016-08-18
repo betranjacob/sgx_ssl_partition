@@ -108,6 +108,10 @@ AC_ARG_ENABLE([asm],
 	AS_HELP_STRING([--disable-asm], [Disable assembly]))
 AM_CONDITIONAL([OPENSSL_NO_ASM], [test "x$enable_asm" = "xno"])
 
+AC_ARG_ENABLE([sgx],
+	AS_HELP_STRING([--enable-sgx], [Load SSL private key and secrets within an enclave]))
+AM_CONDITIONAL([OPENSSL_WITH_SGX], [test "x$enable_sgx" = "xyes"])
+
 # Conditionally enable assembly by default
 AM_CONDITIONAL([HOST_ASM_ELF_X86_64],
     [test "x$HOST_ABI" = "xelf" -a "$host_cpu" = "x86_64" -a "x$enable_asm" != "xno"])
