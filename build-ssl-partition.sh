@@ -154,14 +154,20 @@ build_libressl_sgx() {
 
 build_libressl_busywait() {
 	echo "Configure & Build LibreSSL for busywait"
+	cd $BPATH
+	rm -rf busywait/libressl/
+	rm -f busywait/libressl-pipe
+	cp -r libressl-2.4.1/ $LIBSSL_TEST/
 
-	# cd $STATICLIBSSL
 	cd $LIBSSL_TEST
+	make clean
 	aclocal
         automake
 	autoconf
-	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --prefix=${LIBSSL_TEST}/.openssl/ --host="x86_64-linux" && make -j $NB_PROC
+	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --host="x86_64-linux" && make -j $NB_PROC
 
+	cd $BPATH/busywait
+	make
 	cd $BPATH
 	cd ..
 }
