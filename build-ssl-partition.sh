@@ -151,6 +151,20 @@ build_libressl_sgx() {
 	cd ..
 }
 
+build_libressl_busywait() {
+	echo "Configure & Build LibreSSL for busywait"
+
+	# cd $STATICLIBSSL
+	cd $BPATH/busywait/libressl
+	aclocal
+        automake
+	autoconf
+	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ --host="x86_64-linux" && make -j $NB_PROC
+
+	cd $BPATH
+	cd ..
+}
+
 download_sources() {
 	# grab the source files
 	echo "Download sources"
@@ -251,6 +265,9 @@ case "$1" in
 	
 	build_libressl
 	build_libressl_sgx
+  ;;
+  --lt)
+	build_libressl_busywait
   ;;
   -g|--git)
     install_dependencies
