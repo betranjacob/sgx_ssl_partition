@@ -619,6 +619,8 @@ ssl3_accept(SSL *s)
                         int status;
                         sgx_change_cipher_st sgx_change_cipher;
 
+                        sgx_change_cipher.which =
+                          SSL3_CHANGE_CIPHER_SERVER_WRITE;
                         sgx_change_cipher.cipher_id = s->session->cipher->id;
                         sgx_change_cipher.version = s->version;
                         sgx_change_cipher.mac_flags = s->mac_flags;
@@ -630,10 +632,11 @@ ssl3_accept(SSL *s)
                             (unsigned char *) &sgx_change_cipher);
                         sgxbridge_pipe_read(sizeof(status), &status);
 
-			//if (!status) {
-			//	ret = -1;
-			//	goto end;
-			//}
+			if (!status) {
+                                printf("OOOPS\n");
+				ret = -1;
+				goto end;
+			}
 
 			if (!s->method->ssl3_enc->change_cipher_state(
 			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
