@@ -111,18 +111,20 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
   fd = fd_sgx_ssl;
 #endif
 
-  printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
+  debug_print("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
   print_hex(data, len);
 
   cmd_pkt.cmd = cmd;
-  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH + len;
+  cmd_pkt.data_len = SSL_MAX_SSL_SESSION_ID_LENGTH + SSL_MAX_SSL_SESSION_ID_LENGTH + len;
 
-  memcpy(cmd_pkt.data, s->sgx_session_id, SGX_SESSION_ID_LENGTH);
-  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, s->session->session_id,
+#ifdef OPENSSL_WITH_SGX
+  memcpy(cmd_pkt.data, s->sgx_session_id, SSL_MAX_SSL_SESSION_ID_LENGTH);
+#endif
+  memcpy(cmd_pkt.data + SSL_MAX_SSL_SESSION_ID_LENGTH, s->session->session_id,
       SSL3_SSL_SESSION_ID_LENGTH);
-  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+  memcpy(cmd_pkt.data + SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
       data,
-      CMD_MAX_BUF_SIZE - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH);
+      CMD_MAX_BUF_SIZE - SSL_MAX_SSL_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH);
 
   write(fd, &cmd_pkt, sizeof(cmd_pkt));
 }
@@ -133,9 +135,9 @@ sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
   cmd_pkt_t cmd_pkt;
 
   cmd_pkt.cmd = CMD_SSL_SESSION_REMOVE;
-  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
+  cmd_pkt.data_len = SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
 
-  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, session_id,
+  memcpy(cmd_pkt.data + SSL_MAX_SSL_SESSION_ID_LENGTH, session_id,
       SSL3_SSL_SESSION_ID_LENGTH);
 
   write(fd_ssl_sgx, &cmd_pkt, sizeof(cmd_pkt));
@@ -183,10 +185,10 @@ sgxbridge_fetch_operation(int* cmd, int* data_len, unsigned char* data)
   if (read(fd, &cmd_pkt, sizeof(cmd_pkt_t)) > 0) {
     *cmd = cmd_pkt.cmd;
     *data_len =
-      cmd_pkt.data_len - SGX_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH;
+      cmd_pkt.data_len - SSL_MAX_SSL_SESSION_ID_LENGTH - SSL3_SSL_SESSION_ID_LENGTH;
     memcpy(data, cmd_pkt.data, CMD_MAX_BUF_SIZE);
-    printf("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
-    print_hex(data + SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
+    debug_print("fetch_operation, cmd: %d, len: %d\n", cmd_pkt.cmd, *data_len);
+    print_hex(data + SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH,
         *data_len);
     return 1;
   }
@@ -198,16 +200,16 @@ print_hex(unsigned char* buf, int len)
 {
   int cnt;
   for (cnt = 0; cnt < len; cnt++) {
-    printf("%02X", buf[cnt]);
+    debug_print("%02X", buf[cnt]);
   }
-  printf("\n\r");
+  debug_print("\n\r");
   fflush(stdout);
 }
 
 void
 sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 {
-  printf("generate_server_random\n");
+  debug_print("generate_server_random\n");
 
   sgxbridge_pipe_write_cmd(s,
       CMD_SRV_RAND,
@@ -216,7 +218,7 @@ sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 
   read(fd_sgx_ssl, buf, nbytes);
 
-  printf("server_random:\n");
+  debug_print("server_random:\n");
   print_hex((unsigned char *) buf, nbytes);
 }
 

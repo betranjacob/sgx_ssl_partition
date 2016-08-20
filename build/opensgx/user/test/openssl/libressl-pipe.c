@@ -44,29 +44,29 @@ void
 enclave_main(int argc, char** argv)
 {
   if (argc != 2) {
-    printf("Usage: ./test.sh test/openssl/libressl-pipe\n");
+    debug_print("Usage: ./test.sh test/openssl/libressl-pipe\n");
     sgx_exit(NULL);
   }
 
   // initialize the ssl library
-  fprintf(stdout, "Initialising SSL library and loading error strings...");
+  debug_print("Initialising SSL library and loading error strings...");
   SSL_library_init();
   SSL_load_error_strings();
-  fprintf(stdout, "Done\n");
+  debug_print("Done\n");
 
-  fprintf(stdout, "Initializing SGX & SSL SESSION lhash...");
+  debug_print("Initializing SGX & SSL SESSION lhash...");
   if ((sgx_sess_lh = lh_SGX_SESSION_new()) == NULL ||
        (ssl_sess_lh = lh_SGX_SESSION_new()) == NULL)
           sgx_exit(NULL);
-  fprintf(stdout, "Done\n");
+  debug_print("Done\n");
 
   /* Load Private Key and certificate to SSL_CTX structure */
   load_pKey_and_cert_to_ssl_ctx();
 
   /* initialize the commnads */
-  fprintf(stdout, "Registering commands...");
+  debug_print("Registering commands...");
   register_commands();
-  fprintf(stdout, "Done\n");
+  debug_print("Done\n");
 
   // pipe read loop:
   //   -> fetch in command_len -> command -> data_len -> data
@@ -88,18 +88,6 @@ init_session(SGX_SESSION *sgx_s)
     fprintf(stderr, "client random calloc() failed: %s\n", strerror(errno));
     sgx_exit(NULL);
   }
-}
-
-// just some debug output
-void
-print_session_params(SSL* s)
-{
-  printf("client_random:\n");
-  print_hex(sgx_sess->client_random, SSL3_RANDOM_SIZE);
-  printf("server_random:\n");
-  print_hex(sgx_sess->server_random, SSL3_RANDOM_SIZE);
-  printf("master_key:\n");
-  print_hex(sgx_sess->master_key, SSL3_MASTER_SECRET_SIZE);
 }
 
 // TODO: should the ctx be a parameter? other stuff?
@@ -168,7 +156,7 @@ register_command(int cmd, void (*callback)(int, unsigned char*))
     _commands[cmd].callback = callback;
   } else {
     // TODO: error, too many commands
-    printf("ERROR: command array full, increase MAX_COMMANDS\n");
+    debug_print("ERROR: command array full, increase MAX_COMMANDS\n");
   }
 }
 
@@ -182,16 +170,16 @@ check_commands(int cmd, int data_len, unsigned char* data)
     memcpy(sgx_s.id, data, SSL_MAX_SSL_SESSION_ID_LENGTH);
     memcpy(ssl_s.id, data + SSL_MAX_SSL_SESSION_ID_LENGTH, SSL3_SSL_SESSION_ID_LENGTH);
 
-    fprintf(stdout, "SGX session id: ");
+    debug_print("SGX session id: ");
     print_hex(sgx_s.id, SSL_MAX_SSL_SESSION_ID_LENGTH);
-    fprintf(stdout, "SSL session id: ");
+    debug_print("SSL session id: ");
     print_hex(ssl_s.id, SSL3_SSL_SESSION_ID_LENGTH);
 
     if((sgx_sp = lh_SGX_SESSION_retrieve(ssl_sess_lh, &ssl_s)) == NULL){
-      fprintf(stdout, "SSL session cache MISS\n");
+      debug_print("SSL session cache MISS\n");
 
       if((sgx_sp = lh_SGX_SESSION_retrieve(sgx_sess_lh, &sgx_s)) == NULL){
-        fprintf(stdout, "SGX session cache MISS\n");
+        debug_print("SGX session cache MISS\n");
         if((sgx_sp = calloc(sizeof(SGX_SESSION), 1)) == NULL){
           fprintf(stderr, "sgx_sp calloc() failed: %s\n", strerror(errno));
           sgx_exit(NULL);
@@ -201,26 +189,26 @@ check_commands(int cmd, int data_len, unsigned char* data)
 
         lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
 
-        fprintf(stdout, "Initializing SGX session...");
+        debug_print("Initializing SGX session...");
         init_session(sgx_sp);
-        fprintf(stdout, "Done\n");
+        debug_print("Done\n");
 
       } else {
-        fprintf(stdout, "SGX session cache HIT\n");
+        debug_print("SGX session cache HIT\n");
       }
     } else {
-        fprintf(stdout, "SSL session cache HIT\n");
+        debug_print("SSL session cache HIT\n");
     }
 
     // update current mapping
     sgx_sess = sgx_sp;
 
-    fprintf(stdout, "SGX session mapping key: ");
+    debug_print("SGX session mapping key: ");
     print_hex(sgx_sess->id, SSL_MAX_SSL_SESSION_ID_LENGTH);
 
     data += SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
 
-    printf("Executing command: %d\n", cmd);
+    debug_print("Executing command: %d\n", cmd);
     _commands[cmd].callback(data_len, data);
   } 
 }
@@ -237,10 +225,10 @@ run_command_loop()
   if (sgxbridge_fetch_operation(&cmd, &data_len, data)) {
 
     // DEBUG
-    // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
-    // printf("cmd:\n");
+    // debug_print("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
+    // debug_print("cmd:\n");
     // print_hex((unsigned char *) cmd, cmd_len);
-    // printf("data:\n");
+    // debug_print("data:\n");
     // print_hex((unsigned char *) data, data_len);
 
     check_commands(cmd, data_len, data);
@@ -260,7 +248,7 @@ cmd_clnt_rand(int data_len, unsigned char* data)
   memcpy(sgx_sess->client_random, data, SSL3_RANDOM_SIZE);
 
   // DEBUG
-  puts("client random:\n");
+  debug_print("client random:\n");
   print_hex(sgx_sess->client_random, data_len);
 }
 
@@ -273,7 +261,7 @@ cmd_srv_rand(int data_len, unsigned char* data)
   arc4random_buf(sgx_sess->server_random, SSL3_RANDOM_SIZE);
 
   // DEBUG
-  puts("server random:\n");
+  debug_print("server random:\n");
   print_hex(sgx_sess->server_random, random_len);
 
   // Send the result
@@ -289,7 +277,7 @@ cmd_premaster(int data_len, unsigned char* data)
         data, sgx_sess->premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
-  puts("decrypted premaster secret:\n");
+  debug_print("decrypted premaster secret:\n");
   print_hex(sgx_sess->premaster_secret,
       sgx_sess->premaster_secret_length);
 }
@@ -309,11 +297,8 @@ cmd_master_sec(int data_len, unsigned char* data)
       sgx_sess->master_key, buf, sizeof(buf));
 
   int i;
-  fprintf(stdout, "master key:\n");
-  for(i = 0; i < SSL_MAX_MASTER_KEY_LENGTH; i++){
-    fprintf(stdout, "%x", sgx_sess->master_key[i]);
-  }
-  fprintf(stdout, "\n");
+  debug_print("master key:\n");
+  print_hex(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
 }
 
 void
@@ -323,14 +308,14 @@ cmd_rsa_sign(int data_len, unsigned char* data)
   unsigned char signature[512];
   unsigned int sig_size = 0;
 
-  printf("\n Message Digest : len(%d) ", data_len);
+  debug_print("\n Message Digest : len(%d) ", data_len);
 
   if (RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size,
                private_key->pkey.rsa) <= 0) {
     puts("Error Signing message Digest \n");
   }
 
-  printf("\n Signature : len(%d) ", sig_size);
+  debug_print("\n Signature : len(%d) ", sig_size);
   // print_hex(signature, sig_size);
 
   sgxbridge_pipe_write((unsigned char *) &sig_size, sizeof(int));
@@ -350,7 +335,7 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
   if (md == NULL)
     fprintf(stderr, "\n Retriving Digest from ctx failed \n");
 
-  fprintf(stdout, "\n Message Digest : len(%d) \n ", data_len);
+  debug_print("\n Message Digest : len(%d) \n ", data_len);
 
 #if 0
     fflush(stdout);
@@ -358,7 +343,7 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 #endif
 
   if (!tls12_get_sigandhash((unsigned char *) signature, private_key, md)) {
-    puts("Error getting sigandhash ");
+    debug_print("Error getting sigandhash ");
   }
 
   EVP_MD_CTX_init(&md_ctx);
@@ -371,9 +356,9 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
         (unsigned char *) &signature[4],
         (unsigned int*)&sig_size,
         private_key))
-    puts(" Failed to generate the Signature");
+    debug_print(" Failed to generate the Signature");
 
-  fprintf(stdout, "\n Signature generated successfully : len(%d)\n", sig_size);
+  debug_print("\n Signature generated successfully : len(%d)\n", sig_size);
 
 #if 0
     fflush(stdout);
@@ -407,10 +392,8 @@ cmd_key_block(int data_len, unsigned char* data){
       km, tmp, sgxb->key_block_len);
 
   int i;
-  fprintf(stdout, "keyblock:\n");
-  for(i = 0; i < 136; i++)
-      fprintf(stdout, "%x", km[i]);
-  fprintf(stdout, "\n");
+  debug_print("keyblock:\n");
+  print_hex(km, 136);
 
   // if something went wrong, return length of 1 to indicate an error
   sgxbridge_pipe_write((unsigned char *) km, ret ? sgxb->key_block_len : 1);
@@ -437,10 +420,8 @@ cmd_final_finish_mac(int data_len, unsigned char* data){
       peer_finish_md, buf2, sizeof(buf2));
 
   int i;
-  fprintf(stdout, "final finish MAC:\n");
-  for(i = 0; i < 2 * EVP_MAX_MD_SIZE; i++)
-      fprintf(stdout, "%x", peer_finish_md[i]);
-  fprintf(stdout, "\n");
+  debug_print("final finish MAC:\n");
+  print_hex(peer_finish_md, EVP_MAX_MD_SIZE);
 
   // if something went wrong, return length of 1 to indicate an error
   sgxbridge_pipe_write(peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
@@ -513,7 +494,7 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
     return;
   }
 
-  fprintf(stderr, "Server EC public key created successfully size(%d) \n",
+  debug_print("Server EC public key created successfully size(%d) \n",
       ep->encoded_length);
   ep->rsa_public_key_size = EVP_PKEY_size(private_key);
 
@@ -522,7 +503,7 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
 
   ecdhe_params_size = sizeof(ecdhe_params);
 
-  fprintf(stderr, "Private Key %d Data Size %d \n", ep->rsa_public_key_size,
+  debug_print("Private Key %d Data Size %d \n", ep->rsa_public_key_size,
       ecdhe_params_size);
 
   sgxbridge_pipe_write((unsigned char *) &ecdhe_params_size, sizeof(int));
@@ -574,7 +555,7 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
     fprintf(stderr, "ECDH_compute_key() failed \n");
     return;
   }
-  fprintf(stderr, " EC_DHE Pre-Master Key computed successfully size(%d) \n",
+  debug_print(" EC_DHE Pre-Master Key computed successfully size(%d) \n",
       sgx_sess->premaster_secret_length);
 
   memcpy(sgx_sess->premaster_secret,
@@ -600,12 +581,12 @@ cmd_ssl_handshake_done(int data_len, unsigned char *data)
   memcpy(ssl_session_id, data + SSL_MAX_SSL_SESSION_ID_LENGTH,
       SSL3_SSL_SESSION_ID_LENGTH);
 
-  fprintf(stdout, "Changing mapping key to SSL session ID...");
+  debug_print("Changing mapping key to SSL session ID...");
   lh_SGX_SESSION_delete(sgx_sess_lh, sgx_sess);
 
   if(memcmp(ssl_session_id, zeros, SSL3_SSL_SESSION_ID_LENGTH) == 0){
     // TLS SessionTicket not supported yet
-    fprintf(stderr, "TLS Session Ticket not supported\n");
+    debug_print("TLS Session Ticket not supported\n");
   } else {
     memcpy(sgx_sess->id, data + SSL_MAX_SSL_SESSION_ID_LENGTH,
         SSL3_SSL_SESSION_ID_LENGTH);
@@ -614,18 +595,18 @@ cmd_ssl_handshake_done(int data_len, unsigned char *data)
     lh_SGX_SESSION_insert(ssl_sess_lh, sgx_sess);
   }
 
-  fprintf(stdout, "Done\n");
+  debug_print("Done\n");
 }
 
 void
 cmd_ssl_session_remove(int data_len, unsigned char *data)
 {
-  fprintf(stdout, "Removing SSL session from cache...");
+  debug_print("Removing SSL session from cache...");
   lh_SGX_SESSION_delete(ssl_sess_lh, sgx_sess);
 
   free(sgx_sess->client_random);
   free(sgx_sess->server_random);
   free(sgx_sess);
 
-  fprintf(stdout, "Done\n");
+  debug_print("Done\n");
 }

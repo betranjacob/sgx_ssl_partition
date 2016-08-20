@@ -21,6 +21,12 @@
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
 
+#ifdef DEBUG_PRINTS
+#define debug_print printf
+#else
+#define debug_print(format, args...) ((void)0)
+#endif
+
 int sgxbridge_init();
 int opensgx_pipe_init(int flag_dir);
 int opensgx_pipe_open(char* unique_id, int is_write, int flag_dir);
