@@ -20,6 +20,7 @@
 #define CMD_SSL_HANDSHAKE_DONE     	0x0C
 #define CMD_SSL_SESSION_REMOVE   	0x0D
 #define CMD_CHANGE_CIPHER_STATE   	0x0E
+#define CMD_SGX_TLS1_ENC 	        0x0F
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -42,6 +43,9 @@ void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,
 void sgxbridge_ecdhe_generate_pre_master_key(SSL* s, unsigned char* client_pub,
     int k_size);
 int sgxbridge_change_cipher_state(SSL *s , int which);
+int sgxbridge_pipe_tls1_enc(SSL *s, size_t len, size_t eivlen,
+    unsigned int nonce_used, unsigned char *nonce, unsigned char *ad,
+    unsigned char *in, unsigned char *out, size_t *out_len, int send);
 
 typedef struct
 {

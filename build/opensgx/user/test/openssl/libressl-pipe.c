@@ -150,6 +150,7 @@ register_commands()
   register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
   register_command(CMD_SSL_SESSION_REMOVE, cmd_ssl_session_remove);
   register_command(CMD_CHANGE_CIPHER_STATE, cmd_change_cipher_state);
+  register_command(CMD_SGX_TLS1_ENC, cmd_sgx_tls1_enc);
 }
 
 // needs to be called before the command can be used
@@ -693,5 +694,59 @@ cmd_change_cipher_state(int data_len, unsigned char *data)
       sgx_sess->s, sgx_change_cipher->which);
   sgxbridge_pipe_write((unsigned char *) &status, sizeof(status));
 
+  fprintf(stdout, "Done\n");
+}
+
+void
+cmd_sgx_tls1_enc(int data_len, unsigned char *data)
+{
+  const SSL_AEAD_CTX *aead;
+  unsigned char *out, *buf;
+  size_t out_len, buf_sz;
+  int status = 0;
+
+  sgx_tls1_enc_st *sgx_tls1_enc;
+  sgx_tls1_enc = (sgx_tls1_enc_st *) data;
+
+  out = data + sizeof(sgx_tls1_enc_st);
+  if(sgx_tls1_enc->send){
+    fprintf(stdout, "Sealing input buffer (%zu)...",
+        sgx_tls1_enc->len + sgx_tls1_enc->eivlen);
+
+    aead = sgx_sess->s->aead_write_ctx;
+
+    if (!(status = EVP_AEAD_CTX_seal(&aead->ctx,
+        out + sgx_tls1_enc->eivlen, &out_len,
+        sgx_tls1_enc->len + aead->tag_len, sgx_tls1_enc->nonce,
+        sgx_tls1_enc->nonce_used,
+        data + sizeof(sgx_tls1_enc_st) + sgx_tls1_enc->eivlen,
+        sgx_tls1_enc->len, sgx_tls1_enc->ad, sizeof(sgx_tls1_enc->ad))))
+
+        fprintf(stderr, "SGX seal() failed: %d\n", status);
+  } else {
+    fprintf(stdout, "Opening input buffer (%zu)...\n",
+        sgx_tls1_enc->len + sgx_tls1_enc->eivlen);
+    print_hex(data + sizeof(sgx_tls1_enc_st), sgx_tls1_enc->len);
+
+    aead = sgx_sess->s->aead_read_ctx;
+
+    if (!(status = EVP_AEAD_CTX_open(&aead->ctx,
+            out, &out_len, sgx_tls1_enc->len, sgx_tls1_enc->nonce,
+            sgx_tls1_enc->nonce_used, data + sizeof(sgx_tls1_enc_st),
+            sgx_tls1_enc->len + aead->tag_len, sgx_tls1_enc->ad,
+            sizeof(sgx_tls1_enc->ad))))
+
+        fprintf(stderr, "SGX open() failed: %d\n", status);
+  }
+
+  buf_sz = sizeof(size_t) + sizeof(int) + out_len + sgx_tls1_enc->eivlen;
+  buf = malloc(buf_sz);
+
+  memcpy(buf, &out_len, sizeof(size_t));
+  memcpy(buf + sizeof(size_t), &status, sizeof(int));
+  memcpy(buf + sizeof(size_t) + sizeof(int), out,
+      out_len + sgx_tls1_enc->eivlen);
+
+  sgxbridge_pipe_write(buf, buf_sz);
   fprintf(stdout, "Done\n");
 }
