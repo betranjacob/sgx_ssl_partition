@@ -1281,21 +1281,51 @@ ssl3_send_server_key_exchange(SSL *s)
 
 #ifdef	OPENSSL_WITH_SGX
 			int ep_public_len = 0;
-			// int ec_curve_id = tls1_get_shared_curve(s);
-			int ec_curve_id = 415;
-			// debug_print(" Elliptic Curve ID %d \n", ec_curve_id);
-			printf(" Elliptic Curve ID %d \n", ec_curve_id);
+			int ec_nid = NID_undef;
+			EC_GROUP *group;
 
 			ecdhe_params *ep =
                           (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
 
+			ecdhp = cert->ecdh_tmp;
+			if (s->cert->ecdh_tmp_auto != 0) {
+				ec_nid = tls1_get_shared_curve(s);
+			} else if (ecdhp == NULL &&
+			    s->cert->ecdh_tmp_cb != NULL) {
+				ecdhp = s->cert->ecdh_tmp_cb(s, 0,
+				    SSL_C_PKEYLENGTH(s->s3->tmp.new_cipher));
+			}
+			if (ecdhp == NULL) {
+				al = SSL_AD_HANDSHAKE_FAILURE;
+				SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,
+				    SSL_R_MISSING_TMP_ECDH_KEY);
+				goto f_err;
+			}
+
+			if(ec_nid == NID_undef) {
+				group = EC_KEY_get0_group(ecdhp);
+				if(group != NULL) {
+					ec_nid = EC_GROUP_get_curve_name(group);
+				}
+			}
+
+			if (ec_nid == NID_undef) {
+				debug_print("ERROR: undefined curve\n");
+				// TODO: what to do here?
+				goto err;
+			}
+
+			debug_print(" Elliptic Curve NID %d \n", ec_nid);
+
+
 			unsigned char *mem_ptr = (unsigned char *)ep;
 			sgxbridge_ecdhe_get_public_param(s,
-                            (char *) &ec_curve_id, sizeof(int), mem_ptr,
+                            (char *) &ec_nid, sizeof(int), mem_ptr,
                             &ep_public_len);
 			ep = (ecdhe_params *)mem_ptr;
 
 			debug_print("## EP Public Key from SGX: ");
+			// TODO: not sure the curve id is necessary
             debug_print("Size [%d], curve-id [%d], ",
                             ep_public_len, ep->curve_id);
             debug_print("EncodedPoint-Length [%d], ",
@@ -1310,7 +1340,7 @@ ssl3_send_server_key_exchange(SSL *s)
 #endif
 			encodedPoint = ep->encodedPoint;
 			encodedlen = ep->encoded_length;
-			curve_id = ep->curve_id;
+			curve_id = tls1_ec_nid2curve_id(ec_nid);
 #else
 			const EC_GROUP *group;
 
