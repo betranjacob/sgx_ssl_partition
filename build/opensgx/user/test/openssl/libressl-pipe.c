@@ -435,11 +435,15 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
   ecdhe_params *ep = (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
 
   int *d = (int *) data;
+  printf("curve id: %d\n", *d);
   sgx_sess->ecdh = EC_KEY_new_by_curve_name(*d);
   if (sgx_sess->ecdh == NULL) {
     fprintf(stderr, " EC_KEY_new_by_curve_name() failed \n");
     return;
   }
+
+  // TODO: debug to check why we are so much slower
+  // sgx_sess->ecdh->group->meth->mul = 0;
 
   if ((EC_KEY_get0_public_key(sgx_sess->ecdh) == NULL)
       || (EC_KEY_get0_private_key(sgx_sess->ecdh) == NULL)) {

@@ -1281,8 +1281,10 @@ ssl3_send_server_key_exchange(SSL *s)
 
 #ifdef	OPENSSL_WITH_SGX
 			int ep_public_len = 0;
-			int ec_curve_id = tls1_get_shared_curve(s);
-			debug_print(" Elliptic Curve ID %d \n", ec_curve_id);
+			// int ec_curve_id = tls1_get_shared_curve(s);
+			int ec_curve_id = 415;
+			// debug_print(" Elliptic Curve ID %d \n", ec_curve_id);
+			printf(" Elliptic Curve ID %d \n", ec_curve_id);
 
 			ecdhe_params *ep =
                           (ecdhe_params *) calloc(sizeof(ecdhe_params), 1);
@@ -1313,12 +1315,17 @@ ssl3_send_server_key_exchange(SSL *s)
 			const EC_GROUP *group;
 
 			ecdhp = cert->ecdh_tmp;
+			printf("s->cert->ecdh_tmp_auto = %d\n", s->cert->ecdh_tmp_auto);
 			if (s->cert->ecdh_tmp_auto != 0) {
 				int nid = tls1_get_shared_curve(s);
-				if (nid != NID_undef)
+				printf("nid = %d", nid);
+				if (nid != NID_undef) {
+					printf("ecdhp = EC_KEY_new_by_curve_name\n");
 					ecdhp = EC_KEY_new_by_curve_name(nid);
+				}
 			} else if (ecdhp == NULL &&
 			    s->cert->ecdh_tmp_cb != NULL) {
+				printf("ecdhp going through the ELSE\n");
 				ecdhp = s->cert->ecdh_tmp_cb(s, 0,
 				    SSL_C_PKEYLENGTH(s->s3->tmp.new_cipher));
 			}
@@ -1335,6 +1342,7 @@ ssl3_send_server_key_exchange(SSL *s)
 				goto err;
 			}
 
+			printf("s->cert->ecdh_tmp_auto = %d\n", s->cert->ecdh_tmp_auto);
 			/* Duplicate the ECDH structure. */
 			if (s->cert->ecdh_tmp_auto != 0) {
 				ecdh = ecdhp;

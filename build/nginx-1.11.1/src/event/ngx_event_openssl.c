@@ -1073,6 +1073,7 @@ ngx_ssl_ecdh_curve(ngx_conf_t *cf, ngx_ssl_t *ssl, ngx_str_t *name)
     }
 
     nid = OBJ_sn2nid(curve);
+    printf("nid form nginx: %d\n", nid);
     if (nid == 0) {
         ngx_ssl_error(NGX_LOG_EMERG, ssl->log, 0,
                       "OBJ_sn2nid(\"%s\") failed: unknown curve", curve);
