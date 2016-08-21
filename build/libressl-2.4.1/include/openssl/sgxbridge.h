@@ -41,6 +41,7 @@ void sgxbridge_ecdhe_get_public_param(SSL* s, unsigned char* curve_id,
     int c_size, unsigned char* out, int* size);
 void sgxbridge_ecdhe_generate_pre_master_key(SSL* s, unsigned char* client_pub,
     int k_size);
+int sgxbridge_change_cipher_state(SSL *s , int which);
 
 typedef struct
 {
@@ -68,25 +69,21 @@ typedef struct
 
 typedef struct
 {
+  int which;
+  unsigned long cipher_id;
   int version;
   int mac_flags;
-  /* s->method->ssl3_enc->enc_flags */
   unsigned int enc_flags;
-  /* s->s3->tmp.new_sym_enc */
-  EVP_CIPHER new_sym_enc;
-  /* s->s3->tmp.new_hash; */
-  int mac_sent;
-  EVP_MD new_hash;
-  /* s->s3->tmp.new_mac_pkey_type; */
-  int new_mac_pkey_type;
-  /* s->s3->tmp.new_mac_secret_size */
-  int new_mac_secret_size;
-  /* s->s3->tmp.new_aead */
-  int aead_sent;
-  EVP_AEAD new_aead;
-
-  SSL_CIPHER new_cipher;
 
 } sgx_change_cipher_st;
 
+typedef struct
+{
+  size_t len;
+  size_t eivlen;
+  unsigned int nonce_used;
+  int send;
+  unsigned char nonce[16];
+  unsigned char ad[13];
+} sgx_tls1_enc_st;
 #endif /* _SGXBRIDGE_H_ */

@@ -10,6 +10,8 @@
 #include <openssl/ssl.h>
 #include <openssl/sgxbridge.h>
 
+#include "ssl_locl.h"
+
 #define RB_MODE_RD 0
 #define RB_MODE_WR 1
 
@@ -273,4 +275,23 @@ void sgxbridge_ecdhe_generate_pre_master_key(SSL *s,
 {
     sgxbridge_pipe_write_cmd(s, CMD_GET_ECDHE_PRE_MASTER, k_size, client_pub);
 
+}
+
+int
+sgxbridge_change_cipher_state(SSL *s, int which)
+{
+  int sgx_status = 0;
+  sgx_change_cipher_st sgx_change_cipher;
+
+  sgx_change_cipher.which = which;
+  sgx_change_cipher.cipher_id = s->session->cipher->id;
+  sgx_change_cipher.version = s->version;
+  sgx_change_cipher.mac_flags = s->mac_flags;
+  sgx_change_cipher.enc_flags = s->method->ssl3_enc->enc_flags;
+
+  sgxbridge_pipe_write_cmd(s, CMD_CHANGE_CIPHER_STATE,
+      sizeof(sgx_change_cipher_st), (unsigned char *) &sgx_change_cipher);
+  sgxbridge_pipe_read(sizeof(sgx_status), &sgx_status);
+
+  return sgx_status;
 }
