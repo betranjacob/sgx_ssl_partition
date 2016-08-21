@@ -241,7 +241,10 @@ build_libressl_busywait() {
 
 	cd $LIBSSL_TEST
 	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --host="x86_64-linux" && make -j $NB_PROC
+}
 
+build_busywait_test()
+{
 	cd $BPATH/busywait
 
 	rm -f libressl-pipe
@@ -335,7 +338,7 @@ case "$1" in
   -n|--nginx)
 	build_libressl
 	build_nginx
-	build_libressl_sgx
+	# build_libressl_sgx
   ;;
   --stock)
     build_stock_libressl
@@ -362,6 +365,10 @@ case "$1" in
   ;;
   --lt)
 	build_libressl_busywait
+	build_busywait_test
+  ;;
+  --ts)
+    build_busywait_test
   ;;
   -g|--git)
     install_dependencies
