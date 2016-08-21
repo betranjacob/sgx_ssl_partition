@@ -936,10 +936,16 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+#ifdef OPENSSL_WITH_SGX
+                        if(!sgxbridge_pipe_tls1_enc(s, len, eivlen,
+                            nonce_used, nonce, ad, in, out, &out_len, send))
+                               return -1;
+#else
 			if (!EVP_AEAD_CTX_seal(&aead->ctx,
 			    out + eivlen, &out_len, len + aead->tag_len, nonce,
 			    nonce_used, in + eivlen, len, ad, sizeof(ad)))
 				return -1;
+#endif
 			if (aead->variable_nonce_in_record)
 				out_len += aead->variable_nonce_len;
 		} else {
@@ -989,10 +995,16 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
+#ifdef OPENSSL_WITH_SGX
+                        if(!sgxbridge_pipe_tls1_enc(s, len, aead->tag_len,
+                              nonce_used, nonce, ad, in, out, &out_len, send))
+                                return -1;
+#else
 			if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
 			    nonce, nonce_used, in, len + aead->tag_len, ad,
 			    sizeof(ad)))
 				return -1;
+#endif
 
 			rec->data = rec->input = out;
 		}
