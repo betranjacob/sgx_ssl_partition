@@ -8,7 +8,7 @@
 static int
 sgx_session_cmp(const SGX_SESSION *a, const SGX_SESSION *b)
 {
-  return strncmp((char *) a->id, (char *) b->id, SSL_MAX_SSL_SESSION_ID_LENGTH);
+  return strncmp((char *) a->id, (char *) b->id, SGX_SESSION_ID_LENGTH);
 }
 
 static IMPLEMENT_LHASH_COMP_FN(sgx_session, SGX_SESSION)
@@ -16,8 +16,8 @@ static IMPLEMENT_LHASH_COMP_FN(sgx_session, SGX_SESSION)
 static unsigned long
 sgx_session_hash(const SGX_SESSION *a)
 {
-  unsigned char b[SSL_MAX_SSL_SESSION_ID_LENGTH];
-  MD5(a->id, SSL_MAX_SSL_SESSION_ID_LENGTH, b);
+  unsigned char b[SGX_SESSION_ID_LENGTH];
+  MD5(a->id, SGX_SESSION_ID_LENGTH, b);
 
   return(b[0]|(b[1]<<8)|(b[2]<<16)|(b[3]<<24));
 }
@@ -179,11 +179,11 @@ check_commands(int cmd, int data_len, unsigned char* data)
   if(cmd == _commands[cmd].cmd_num){
 
     SGX_SESSION sgx_s, ssl_s, *sgx_sp;
-    memcpy(sgx_s.id, data, SSL_MAX_SSL_SESSION_ID_LENGTH);
-    memcpy(ssl_s.id, data + SSL_MAX_SSL_SESSION_ID_LENGTH, SSL3_SSL_SESSION_ID_LENGTH);
+    memcpy(sgx_s.id, data, SGX_SESSION_ID_LENGTH);
+    memcpy(ssl_s.id, data + SGX_SESSION_ID_LENGTH, SSL3_SSL_SESSION_ID_LENGTH);
 
     fprintf(stdout, "SGX session id: ");
-    print_hex(sgx_s.id, SSL_MAX_SSL_SESSION_ID_LENGTH);
+    print_hex(sgx_s.id, SGX_SESSION_ID_LENGTH);
     fprintf(stdout, "SSL session id: ");
     print_hex(ssl_s.id, SSL3_SSL_SESSION_ID_LENGTH);
 
@@ -196,7 +196,7 @@ check_commands(int cmd, int data_len, unsigned char* data)
           fprintf(stderr, "sgx_sp calloc() failed: %s\n", strerror(errno));
           sgx_exit(NULL);
         }
-        memcpy(sgx_sp->id, data, SSL_MAX_SSL_SESSION_ID_LENGTH);
+        memcpy(sgx_sp->id, data, SGX_SESSION_ID_LENGTH);
         sgx_sp->type = SGX_SESSION_TYPE;
 
         lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
@@ -216,9 +216,9 @@ check_commands(int cmd, int data_len, unsigned char* data)
     sgx_sess = sgx_sp;
 
     fprintf(stdout, "SGX session mapping key: ");
-    print_hex(sgx_sess->id, SSL_MAX_SSL_SESSION_ID_LENGTH);
+    print_hex(sgx_sess->id, SGX_SESSION_ID_LENGTH);
 
-    data += SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
+    data += SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
 
     printf("Executing command: %d\n", cmd);
     _commands[cmd].callback(data_len, data);
@@ -588,16 +588,16 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
 void
 cmd_ssl_handshake_done(int data_len, unsigned char *data)
 {
-  unsigned char sgx_session_id[SSL_MAX_SSL_SESSION_ID_LENGTH];
+  unsigned char sgx_session_id[SGX_SESSION_ID_LENGTH];
   unsigned char ssl_session_id[SSL3_SSL_SESSION_ID_LENGTH];
   unsigned char zeros[SSL3_SSL_SESSION_ID_LENGTH];
   memset(zeros, 0, SSL3_SSL_SESSION_ID_LENGTH);
 
   // this is way too dirty, think about it more later
-  data -= (SSL_MAX_SSL_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH);
+  data -= (SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH);
 
-  memcpy(sgx_session_id, data, SSL_MAX_SSL_SESSION_ID_LENGTH);
-  memcpy(ssl_session_id, data + SSL_MAX_SSL_SESSION_ID_LENGTH,
+  memcpy(sgx_session_id, data, SGX_SESSION_ID_LENGTH);
+  memcpy(ssl_session_id, data + SGX_SESSION_ID_LENGTH,
       SSL3_SSL_SESSION_ID_LENGTH);
 
   fprintf(stdout, "Changing mapping key to SSL session ID...");
@@ -607,7 +607,7 @@ cmd_ssl_handshake_done(int data_len, unsigned char *data)
     // TLS SessionTicket not supported yet
     fprintf(stderr, "TLS Session Ticket not supported\n");
   } else {
-    memcpy(sgx_sess->id, data + SSL_MAX_SSL_SESSION_ID_LENGTH,
+    memcpy(sgx_sess->id, data + SGX_SESSION_ID_LENGTH,
         SSL3_SSL_SESSION_ID_LENGTH);
     sgx_sess->type = SSL_SESSION_TYPE;
 

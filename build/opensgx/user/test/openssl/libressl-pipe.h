@@ -42,8 +42,7 @@ typedef struct
 typedef struct
 {
   unsigned short int type;
-  // unsigned char id[SGX_SESSION_ID_LENGTH];
-  unsigned char id[SSL_MAX_SSL_SESSION_ID_LENGTH];
+  unsigned char id[SGX_SESSION_ID_LENGTH];
 
   unsigned char* client_random;
   unsigned char* server_random;
