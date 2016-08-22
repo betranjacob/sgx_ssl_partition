@@ -227,20 +227,17 @@ run_command_loop()
   unsigned char data[CMD_MAX_BUF_SIZE];
 
   // read in operation
-  if (sgxbridge_fetch_operation(&cmd_pkt, data)) {
-
-    // DEBUG
-    // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
-    // printf("cmd:\n");
-    // print_hex((unsigned char *) cmd, cmd_len);
-    // printf("data:\n");
-    // print_hex((unsigned char *) data, data_len);
-
-    check_commands(cmd_pkt, data);
+  if (sgxbridge_fetch_operation(&cmd_pkt)) {
+    if(sgxbridge_fetch_data(data, cmd_pkt.data_len)){
+      check_commands(cmd_pkt, data);
+    } else {
+      fprintf(stderr, "SGX error while fetching data. Exiting...\n");
+      sgx_exit(NULL);
+    }
   } else {
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes
-    //puts("empty\n");
+    fprintf(stderr, "SGX error while fetching operation.\n");
   }
 }
 
