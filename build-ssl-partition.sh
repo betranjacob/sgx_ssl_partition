@@ -218,7 +218,8 @@ build_libressl_sgx() {
 
 build_libressl_busywait() {
 	echo "Configure & Build LibreSSL for busywait"
-	
+	cd $BPATH	
+
 	if [ ! -d "$LIBSSL_TEST" ]; then
 		cp -r libressl-2.4.1/ $LIBSSL_TEST/
 		
