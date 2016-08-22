@@ -155,7 +155,7 @@ register_commands()
 
 // needs to be called before the command can be used
 void
-register_command(int cmd, void (*callback)(int, unsigned char*))
+register_command(int cmd, void (*callback)(cmd_pkt_t, unsigned char*))
 {
   // just add it to our static array.
   if (cmd < MAX_COMMANDS) {
@@ -169,13 +169,13 @@ register_command(int cmd, void (*callback)(int, unsigned char*))
 
 // tries to match incoming command to a registered one, executes if found
 void
-check_commands(int cmd, int data_len, unsigned char* data)
+check_commands(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
-  if(cmd == _commands[cmd].cmd_num){
+  if(cmd_pkt.cmd == _commands[cmd_pkt.cmd].cmd_num){
 
     SGX_SESSION sgx_s, ssl_s, *sgx_sp;
-    memcpy(sgx_s.id, data, SGX_SESSION_ID_LENGTH);
-    memcpy(ssl_s.id, data + SGX_SESSION_ID_LENGTH, SSL3_SSL_SESSION_ID_LENGTH);
+    memcpy(sgx_s.id, cmd_pkt.sgx_session_id, SGX_SESSION_ID_LENGTH);
+    memcpy(ssl_s.id, cmd_pkt.ssl_session_id, SSL3_SSL_SESSION_ID_LENGTH);
 
     fprintf(stdout, "SGX session id: ");
     print_hex(sgx_s.id, SGX_SESSION_ID_LENGTH);
@@ -191,7 +191,7 @@ check_commands(int cmd, int data_len, unsigned char* data)
           fprintf(stderr, "sgx_sp calloc() failed: %s\n", strerror(errno));
           sgx_exit(NULL);
         }
-        memcpy(sgx_sp->id, data, SGX_SESSION_ID_LENGTH);
+        memcpy(sgx_sp->id, sgx_s.id, SGX_SESSION_ID_LENGTH);
         sgx_sp->type = SGX_SESSION_TYPE;
 
         lh_SGX_SESSION_insert(sgx_sess_lh, sgx_sp);
@@ -213,10 +213,8 @@ check_commands(int cmd, int data_len, unsigned char* data)
     fprintf(stdout, "SGX session mapping key: ");
     print_hex(sgx_sess->id, SGX_SESSION_ID_LENGTH);
 
-    data += SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
-
-    printf("Executing command: %d\n", cmd);
-    _commands[cmd].callback(data_len, data);
+    printf("Executing command: %d\n", cmd_pkt.cmd);
+    _commands[cmd_pkt.cmd].callback(cmd_pkt, data);
   } 
 }
 
@@ -225,11 +223,11 @@ check_commands(int cmd, int data_len, unsigned char* data)
 void
 run_command_loop()
 {
-  int cmd, data_len;
+  cmd_pkt_t cmd_pkt;
   unsigned char data[CMD_MAX_BUF_SIZE];
 
   // read in operation
-  if (sgxbridge_fetch_operation(&cmd, &data_len, data)) {
+  if (sgxbridge_fetch_operation(&cmd_pkt, data)) {
 
     // DEBUG
     // printf("cmd_len: %d\ndata_len: %d\n", cmd_len, data_len);
@@ -238,7 +236,7 @@ run_command_loop()
     // printf("data:\n");
     // print_hex((unsigned char *) data, data_len);
 
-    check_commands(cmd, data_len, data);
+    check_commands(cmd_pkt, data);
   } else {
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes
@@ -249,18 +247,18 @@ run_command_loop()
 /* ========================= Command callbacks ============================= */
 
 void
-cmd_clnt_rand(int data_len, unsigned char* data)
+cmd_clnt_rand(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   // TODO: check on data_len?
   memcpy(sgx_sess->s->s3->client_random, data, SSL3_RANDOM_SIZE);
 
   // DEBUG
   puts("client random:\n");
-  print_hex(sgx_sess->s->s3->client_random, data_len);
+  print_hex(sgx_sess->s->s3->client_random, cmd_pkt.data_len);
 }
 
 void
-cmd_srv_rand(int data_len, unsigned char* data)
+cmd_srv_rand(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   int random_len = *((int *)data);
 
@@ -276,11 +274,11 @@ cmd_srv_rand(int data_len, unsigned char* data)
 }
 
 void
-cmd_premaster(int data_len, unsigned char* data)
+cmd_premaster(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   // decrypt premaster secret (TODO: need to do anyt with i?)
   sgx_sess->premaster_secret_length =
-    RSA_private_decrypt(data_len,
+    RSA_private_decrypt(cmd_pkt.data_len,
         data, sgx_sess->premaster_secret, rsa, RSA_PKCS1_PADDING);
 
   // DEBUG
@@ -290,7 +288,7 @@ cmd_premaster(int data_len, unsigned char* data)
 }
 
 void
-cmd_master_sec(int data_len, unsigned char* data)
+cmd_master_sec(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   int ret;
   long *algo2 = (long *) data;
@@ -311,7 +309,8 @@ cmd_master_sec(int data_len, unsigned char* data)
   fprintf(stdout, "\n");
 }
 
-void cmd_rsa_sign(int data_len, unsigned char* data)
+void
+cmd_rsa_sign(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   unsigned char md_buf[512], signature[512], *q;
   unsigned int sig_size = 0;
@@ -334,7 +333,7 @@ void cmd_rsa_sign(int data_len, unsigned char* data)
 	  SSL3_RANDOM_SIZE);
    	  EVP_DigestUpdate(&md_ctx, sgx_sess->s->s3->server_random,
 	  SSL3_RANDOM_SIZE);
-	  EVP_DigestUpdate(&md_ctx, data, data_len);
+	  EVP_DigestUpdate(&md_ctx, data, cmd_pkt.data_len);
 	  EVP_DigestFinal_ex(&md_ctx, q, (unsigned int *) &i);
 	  q += i;
 	  j += i;
@@ -352,8 +351,9 @@ void cmd_rsa_sign(int data_len, unsigned char* data)
   sgxbridge_pipe_write((unsigned char *) &sig_size, sizeof(int));
   sgxbridge_pipe_write((unsigned char *) signature, sig_size);
 }
+
 void
-cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
+cmd_rsa_sign_sig_alg(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   unsigned char* md_buf = data;
   char signature[512];
@@ -365,11 +365,11 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
   if (md == NULL)
     fprintf(stderr, "\n Retriving Digest from ctx failed \n");
 
-  fprintf(stdout, "\n Message Digest : len(%d) \n ", data_len);
+  fprintf(stdout, "\n Message Digest : len(%d) \n ", cmd_pkt.data_len);
 
 #if 0
     fflush(stdout);
-    print_hex(md_buf, data_len);
+    print_hex(md_buf, cmd_pkt.data_len);
 #endif
 
   if (!tls12_get_sigandhash((unsigned char *) signature, private_key, md)) {
@@ -380,7 +380,7 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
   EVP_SignInit_ex(&md_ctx, md, NULL);
   EVP_SignUpdate(&md_ctx, sgx_sess->s->s3->client_random, SSL3_RANDOM_SIZE);
   EVP_SignUpdate(&md_ctx, sgx_sess->s->s3->server_random, SSL3_RANDOM_SIZE);
-  EVP_SignUpdate(&md_ctx, md_buf, data_len);
+  EVP_SignUpdate(&md_ctx, md_buf, cmd_pkt.data_len);
 
   if (!EVP_SignFinal(&md_ctx,
         (unsigned char *) &signature[4],
@@ -403,7 +403,7 @@ cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 }
 
 void
-cmd_key_block(int data_len, unsigned char* data){
+cmd_key_block(cmd_pkt_t cmd_pkt, unsigned char* data){
 
   int ret;
   sgxbridge_st *sgxb;
@@ -445,7 +445,7 @@ cmd_key_block(int data_len, unsigned char* data){
 }
 
 void
-cmd_final_finish_mac(int data_len, unsigned char* data){
+cmd_final_finish_mac(cmd_pkt_t cmd_pkt, unsigned char* data){
 
   int ret;
   sgxbridge_st *sgxb;
@@ -471,7 +471,7 @@ cmd_final_finish_mac(int data_len, unsigned char* data){
   sgxbridge_pipe_write(peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
 }
 
-void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
+void cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   const EC_GROUP *group;
   BN_CTX *bn_ctx = NULL;
@@ -555,7 +555,7 @@ void cmd_ecdhe_get_public_param(int data_len, unsigned char* data)
   free(ep);
 }
 
-void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
+void cmd_ecdhe_generate_pre_master_key(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   EC_POINT *clnt_ecpoint = NULL;
   BN_CTX *bn_ctx = NULL;
@@ -581,7 +581,7 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
     return;
   }
 
-  if (EC_POINT_oct2point(group, clnt_ecpoint, data, data_len, bn_ctx) == 0) {
+  if (EC_POINT_oct2point(group, clnt_ecpoint, data, cmd_pkt.data_len, bn_ctx) == 0) {
     fprintf(stderr, "EC_POINT_oct2point() failed \n");
     return;
   }
@@ -611,29 +611,19 @@ void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data)
 }
 
 void
-cmd_ssl_handshake_done(int data_len, unsigned char *data)
+cmd_ssl_handshake_done(cmd_pkt_t cmd_pkt, unsigned char *data)
 {
-  unsigned char sgx_session_id[SGX_SESSION_ID_LENGTH];
-  unsigned char ssl_session_id[SSL3_SSL_SESSION_ID_LENGTH];
   unsigned char zeros[SSL3_SSL_SESSION_ID_LENGTH];
   memset(zeros, 0, SSL3_SSL_SESSION_ID_LENGTH);
-
-  // this is way too dirty, think about it more later
-  data -= (SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH);
-
-  memcpy(sgx_session_id, data, SGX_SESSION_ID_LENGTH);
-  memcpy(ssl_session_id, data + SGX_SESSION_ID_LENGTH,
-      SSL3_SSL_SESSION_ID_LENGTH);
 
   fprintf(stdout, "Changing mapping key to SSL session ID...");
   lh_SGX_SESSION_delete(sgx_sess_lh, sgx_sess);
 
-  if(memcmp(ssl_session_id, zeros, SSL3_SSL_SESSION_ID_LENGTH) == 0){
+  if(memcmp(cmd_pkt.ssl_session_id, zeros, SSL3_SSL_SESSION_ID_LENGTH) == 0){
     // TLS SessionTicket not supported yet
     fprintf(stderr, "TLS Session Ticket not supported\n");
   } else {
-    memcpy(sgx_sess->id, data + SGX_SESSION_ID_LENGTH,
-        SSL3_SSL_SESSION_ID_LENGTH);
+    memcpy(sgx_sess->id, cmd_pkt.ssl_session_id, SSL3_SSL_SESSION_ID_LENGTH);
     sgx_sess->type = SSL_SESSION_TYPE;
 
     lh_SGX_SESSION_insert(ssl_sess_lh, sgx_sess);
@@ -643,7 +633,7 @@ cmd_ssl_handshake_done(int data_len, unsigned char *data)
 }
 
 void
-cmd_ssl_session_remove(int data_len, unsigned char *data)
+cmd_ssl_session_remove(cmd_pkt_t cmd_pkt, unsigned char *data)
 {
   fprintf(stdout, "Removing SSL session from cache...");
   lh_SGX_SESSION_delete(ssl_sess_lh, sgx_sess);
@@ -653,7 +643,7 @@ cmd_ssl_session_remove(int data_len, unsigned char *data)
 }
 
 void
-cmd_change_cipher_state(int data_len, unsigned char *data)
+cmd_change_cipher_state(cmd_pkt_t cmd_pkt, unsigned char *data)
 {
   int mac_type = NID_undef, mac_secret_size = 0, status;
 
@@ -698,7 +688,7 @@ cmd_change_cipher_state(int data_len, unsigned char *data)
 }
 
 void
-cmd_sgx_tls1_enc(int data_len, unsigned char *data)
+cmd_sgx_tls1_enc(cmd_pkt_t cmd_pkt, unsigned char *data)
 {
   const SSL_AEAD_CTX *aead;
   unsigned char *out, *buf;
