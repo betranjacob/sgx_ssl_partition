@@ -97,7 +97,7 @@ sgxbridge_pipe_read(size_t len, unsigned char* data)
       return -1;
     } else {
       num += n;
-      fprintf(stderr, "SGX read() %d out of %d bytes\n", num, len);
+      fprintf(stderr, "SGX read() %zu out of %zu bytes\n", num, len);
     }
   }
 
@@ -121,7 +121,7 @@ sgxbridge_pipe_write(unsigned char* data, size_t len)
       return -1;
     } else {
       num += n;
-      fprintf(stderr, "SGX write() %d out of %d bytes\n", num, len);
+      fprintf(stderr, "SGX write() %zu out of %zu bytes\n", num, len);
     }
   }
 
@@ -138,7 +138,7 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
 #endif
 
   printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
-  print_hex(data, len);
+  print_hex_trim(data, len);
 
   cmd_pkt.cmd = cmd;
   memcpy(cmd_pkt.sgx_session_id, s->sgx_session_id, SGX_SESSION_ID_LENGTH);
@@ -146,9 +146,8 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
       SSL3_SSL_SESSION_ID_LENGTH);
   cmd_pkt.data_len = len;
 
-  memcpy(cmd_pkt.data, data, CMD_MAX_BUF_SIZE);
-
   sgxbridge_pipe_write(&cmd_pkt, sizeof(cmd_pkt));
+  sgxbridge_pipe_write(data, len);
 }
 
 void
@@ -157,10 +156,8 @@ sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id)
   cmd_pkt_t cmd_pkt;
 
   cmd_pkt.cmd = CMD_SSL_SESSION_REMOVE;
-  cmd_pkt.data_len = SGX_SESSION_ID_LENGTH + SSL3_SSL_SESSION_ID_LENGTH;
-
-  memcpy(cmd_pkt.data + SGX_SESSION_ID_LENGTH, session_id,
-      SSL3_SSL_SESSION_ID_LENGTH);
+  cmd_pkt.data_len = 0;
+  memcpy(cmd_pkt.ssl_session_id, session_id, SSL3_SSL_SESSION_ID_LENGTH);
 
   sgxbridge_pipe_write(&cmd_pkt, sizeof(cmd_pkt));
 }
@@ -196,7 +193,7 @@ sgxbridge_init()
 }
 
 int
-sgxbridge_fetch_operation(cmd_pkt_t *cmd_pkt, unsigned char* data)
+sgxbridge_fetch_operation(cmd_pkt_t *cmd_pkt)
 {
   int fd = fd_sgx_ssl;
 #ifdef SGX_ENCLAVE
@@ -204,10 +201,19 @@ sgxbridge_fetch_operation(cmd_pkt_t *cmd_pkt, unsigned char* data)
 #endif
 
   if (sgxbridge_pipe_read(sizeof(cmd_pkt_t), cmd_pkt) > 0) {
-    memcpy(data, cmd_pkt->data, CMD_MAX_BUF_SIZE);
     printf("fetch_operation, cmd: %d, len: %d\n",
         cmd_pkt->cmd, cmd_pkt->data_len);
-    print_hex(data, cmd_pkt->data_len);
+    return 1;
+  }
+  return 0;
+}
+
+int
+sgxbridge_fetch_data(unsigned char *data, size_t len)
+{
+  if (sgxbridge_pipe_read(len, data) > 0) {
+    printf("SGX fetch data (%zu bytes)\n", len);
+    print_hex_trim(data, len);
     return 1;
   }
   return 0;
@@ -220,8 +226,21 @@ print_hex(unsigned char* buf, int len)
   for (cnt = 0; cnt < len; cnt++) {
     printf("%02X", buf[cnt]);
   }
+
   printf("\n\r");
   fflush(stdout);
+}
+
+void
+print_hex_trim(unsigned char *buf, int len){
+  int cnt;
+
+  for (cnt = 0; cnt < 128; cnt++) {
+    if(cnt < 64) printf("%02X", buf[cnt]);
+    else if(cnt == 64) printf("...");
+    else printf("%02X", buf[len - 128 + cnt]);
+  }
+  printf("\n\r");
 }
 
 void
