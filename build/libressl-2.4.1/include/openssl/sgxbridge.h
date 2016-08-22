@@ -76,7 +76,7 @@ int sgxbridge_init();
 int opensgx_pipe_init(int flag_dir);
 int opensgx_pipe_open(char* unique_id, int is_write, int flag_dir);
 ssize_t sgxbridge_pipe_read(size_t len, unsigned char* data);
-void sgxbridge_pipe_write(unsigned char* data, int len);
+ssize_t sgxbridge_pipe_write(unsigned char* data, size_t len);
 void sgxbridge_pipe_write_cmd(SSL* s, int cmd, int len, unsigned char* data);
 void sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id);
 void print_hex(unsigned char* buf, int len);
