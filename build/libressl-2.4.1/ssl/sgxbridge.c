@@ -80,16 +80,28 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
   return fd;
 }
 
-void
-sgxbridge_pipe_read(int len, unsigned char* data)
+ssize_t
+sgxbridge_pipe_read(size_t len, unsigned char* data)
 {
+  size_t num = 0, n;
   int fd = fd_sgx_ssl;
 
 #ifdef SGX_ENCLAVE
   fd = fd_ssl_sgx;
 #endif
 
-  read(fd, data, len);
+  while(num < len){
+    if((n = read(fd, data + num, len - num)) < 0){
+      fprintf(stderr, "SGX read() failed: %s\n", strerror(errno));
+
+      return -1;
+    } else {
+      num += n;
+      fprintf(stderr, "SGX read() %d out of %d bytes\n", num, len);
+    }
+  }
+
+  return num;
 }
 
 void
