@@ -785,14 +785,8 @@ tls1_setup_key_block(SSL *s)
                 (unsigned char *) &sgxb);
         sgxbridge_pipe_read(key_block_len, (char *) key_block);
 
-        if(key_block_len == 1)
-            goto err;
-
-        int i;
         fprintf(stdout, "keyblock (%d):\n", key_block_len);
-        for(i = 0; i < key_block_len; i++)
-            fprintf(stdout, "%x", key_block[i]);
-        fprintf(stdout, "\n");
+        print_hex(key_block, key_block_len);
 #else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
@@ -1206,10 +1200,7 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
                 CMD_FINAL_FINISH_MAC,
                 sizeof(sgxbridge_st),
                 (unsigned char *) &sgxb);
-        sgxbridge_pipe_read(2 * EVP_MAX_MD_SIZE, (char *) out);
-
-        if(sgxb.key_block_len == 1)
-            err = 1;
+        sgxbridge_pipe_read((size_t) 2 * EVP_MAX_MD_SIZE, out);
 
         fprintf(stdout, "final finish MAC (%d): %s\n",
             s->s3->tmp.peer_finish_md_len, str);

@@ -681,7 +681,7 @@ ssl3_accept(SSL *s)
 
 #ifdef OPENSSL_WITH_SGX
                         sgxbridge_pipe_write_cmd(s,
-                            CMD_SSL_HANDSHAKE_DONE, 1, "d");
+                            CMD_SSL_HANDSHAKE_DONE, 0, NULL);
 #endif
 			goto end;
 			/* break; */
