@@ -63,6 +63,20 @@ build_libressl() {
 	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-sgx --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
 }
 
+build_stock_libressl() {
+	# build static LibreSSL
+	echo "Configure & Build Stock LibreSSL"
+	
+	# cd $BPATH/$VERSION_LIBRESSL
+	cd $STATICLIBSSL
+	# ./configure LDFLAGS=-lrt --prefix=${STATICLIBSSL}/.openssl/ && make install-strip -j $NB_PROC
+
+	echo $(pwd)
+
+	#no strip for callgrind
+	./configure LDFLAGS="-lrt" CFLAGS="-O0 -g" --enable-shared --prefix=${STATICLIBSSL}/.openssl/ && make install -j $NB_PROC
+}
+
 build_nginx() {
 	# build nginx, with various modules included/excluded
 	echo "Configure & Build Nginx"
@@ -74,6 +88,56 @@ build_nginx() {
 	--with-debug \
 	--with-ld-opt="-lrt"  \
 	--with-cc-opt='-O0 -g -DOPENSSL_WITH_SGX' \
+	--sbin-path=/usr/sbin/nginx \
+	--conf-path=/etc/nginx/nginx.conf \
+	--error-log-path=$NGINX_LOG_DIR/error.log \
+	--http-log-path=$NGINX_LOG_DIR/access.log \
+	--with-http_ssl_module \
+	--with-http_v2_module \
+	--with-file-aio \
+	--with-ipv6 \
+	--with-http_gzip_static_module \
+	--with-http_stub_status_module \
+	--without-mail_pop3_module \
+	--without-mail_smtp_module \
+	--without-mail_imap_module \
+	--with-http_image_filter_module \
+	--lock-path=/var/lock/nginx.lock \
+	--pid-path=/var/run/nginx.pid \
+	--http-client-body-temp-path=/var/lib/nginx/body \
+	--http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+	--http-proxy-temp-path=/var/lib/nginx/proxy \
+	--http-scgi-temp-path=/var/lib/nginx/scgi \
+	--http-uwsgi-temp-path=/var/lib/nginx/uwsgi \
+	--with-http_stub_status_module \
+	--with-http_realip_module \
+	--with-http_auth_request_module \
+	--with-http_addition_module \
+	--with-http_geoip_module \
+	--with-http_gzip_static_module
+
+	touch $STATICLIBSSL/.openssl/include/openssl/ssl.h
+	# make -j $NB_PROC && sudo checkinstall --pkgname="nginx-libressl" --pkgversion="$NGINX_VERSION" \
+	# --provides="nginx" --requires="libc6, zlib1g" --strip=yes \
+	# --stripso=yes --backup=yes -y --install=yes
+
+	# dont strip for callgrind
+	make -j $NB_PROC && sudo checkinstall --pkgname="nginx-libressl" --pkgversion="$NGINX_VERSION" \
+	--provides="nginx" --requires="libc6, zlib1g" --strip=no \
+	--stripso=no --backup=yes -y --install=yes
+}
+
+build_stock_nginx() {
+	# build nginx, with various modules included/excluded
+	echo "Configure & Build stock Nginx"
+	cd $BPATH/$VERSION_NGINX
+
+	mkdir -p $BPATH/nginx
+	./configure  --with-openssl=$STATICLIBSSL \
+        --with-openssl-opt='--prefix=${STATICLIBSSL}/.openssl' \
+	--with-debug \
+	--with-ld-opt="-lrt"  \
+	--with-cc-opt='-O0 -g' \
 	--sbin-path=/usr/sbin/nginx \
 	--conf-path=/etc/nginx/nginx.conf \
 	--error-log-path=$NGINX_LOG_DIR/error.log \
@@ -154,22 +218,40 @@ build_libressl_sgx() {
 
 build_libressl_busywait() {
 	echo "Configure & Build LibreSSL for busywait"
-	cd $BPATH
-	rm -rf busywait/libressl/
-	rm -f busywait/libressl-pipe
-	cp -r libressl-2.4.1/ $LIBSSL_TEST/
-	cp opensgx/user/test/openssl/libressl-pipe.c busywait
-	cp opensgx/user/test/openssl/libressl-pipe.h busywait
+	cd $BPATH	
+
+	if [ ! -d "$LIBSSL_TEST" ]; then
+		cp -r libressl-2.4.1/ $LIBSSL_TEST/
+		
+		cd $LIBSSL_TEST
+		make clean
+
+		aclocal
+	    automake
+		autoconf
+
+		cd $BPATH
+		cd ..
+	fi
+
+	echo "Copying changed libressl files"
+	RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $LIBSSL_TEST/crypto/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $LIBSSL_TEST/ssl/
+	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $LIBSSL_TEST/include/openssl/
 
 	cd $LIBSSL_TEST
-	make clean
-	aclocal
-        automake
-	autoconf
 	./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" --enable-sgx --enable-shared --host="x86_64-linux" && make -j $NB_PROC
 
 	cd $BPATH/busywait
+
+	rm -f libressl-pipe
+	
+	cp ../opensgx/user/test/openssl/libressl-pipe.c ./
+	cp ../opensgx/user/test/openssl/libressl-pipe.h ./
+
 	make
+	
 	cd $BPATH
 	cd ..
 }
@@ -256,6 +338,10 @@ case "$1" in
 	build_nginx
 	build_libressl_sgx
   ;;
+  --stock)
+    build_stock_libressl
+    build_stock_nginx
+  ;;
   --ns)
 	build_libressl_sgx
   ;;
@@ -276,12 +362,6 @@ case "$1" in
 	build_libressl_sgx
   ;;
   --lt)
-	echo "Copying changed libressl files"
-	$RSYNC_OPTIONS="--include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs"
-	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/crypto/ $BPATH/busywait/libressl/crypto/
-	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/ssl/ $BPATH/busywait/libressl/ssl/
-	rsync -avP --include '*/' --include '*.c' --include '*.h' --exclude '*' --prune-empty-dirs $STATICLIBSSL/include/openssl/ $BPATH/busywait/libressl/include/openssl/
-
 	build_libressl_busywait
   ;;
   -g|--git)
