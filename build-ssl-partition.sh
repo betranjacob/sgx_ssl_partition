@@ -367,7 +367,7 @@ case "$1" in
   -g|--git)
     install_dependencies
     build_opensgx
-    buold_libressl
+    build_libressl
     build_nginx
     prepare_fresh
     build_libressl_sgx
