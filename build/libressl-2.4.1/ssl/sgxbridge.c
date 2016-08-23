@@ -97,7 +97,7 @@ sgxbridge_pipe_read(size_t len, unsigned char* data)
       return -1;
     } else {
       num += n;
-      fprintf(stderr, "SGX read() %zu out of %zu bytes\n", num, len);
+      fprintf(stdout, "SGX read() %zu out of %zu bytes\n", num, len);
     }
   }
 
@@ -121,7 +121,7 @@ sgxbridge_pipe_write(unsigned char* data, size_t len)
       return -1;
     } else {
       num += n;
-      fprintf(stderr, "SGX write() %zu out of %zu bytes\n", num, len);
+      fprintf(stdout, "SGX write() %zu out of %zu bytes\n", num, len);
     }
   }
 
