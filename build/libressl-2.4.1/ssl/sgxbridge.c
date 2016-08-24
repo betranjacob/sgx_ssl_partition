@@ -262,7 +262,13 @@ sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 int
 sgxbridge_get_master_secret(SSL *s, unsigned char* buf)
 {
-  sgxbridge_pipe_write_cmd(s, CMD_MASTER_SEC, 1, "m");
+  long algo2 = ssl_get_algorithm2(s);
+  sgxbridge_pipe_write_cmd(s,
+            CMD_MASTER_SEC,
+            sizeof(algo2),
+            (unsigned char *) &algo2);
+
+  sgxbridge_pipe_read(SSL3_MASTER_SECRET_SIZE, buf);
 
   return SSL3_MASTER_SECRET_SIZE;
 }
