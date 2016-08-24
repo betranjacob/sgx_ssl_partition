@@ -313,11 +313,11 @@ prepare_fresh() {
 
 	# generate certificates if not present
 	#from https://www.digitalocean.com/community/tutorials/how-to-create-an-ssl-certificate-on-nginx-for-ubuntu-14-04
-	SSL_CRT_DIR="/etc/nginx/ssl"
+	SSL_CRT_DIR=/etc/nginx/ssl
 	if [ ! -d $SSL_CRT_DIR ]; then
 		echo "Creating certificates"
-		sudo mkdir SSL_CRT_DIR
-		sudo printf "GB\nLondon\nLondon\nUCL\nNCS\nlocalhost\nfoo@localhost\n" | openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout $SSL_CRT_DIR/nginx.key -out $SSL_CRT_DIR/nginx.crt
+		sudo mkdir $SSL_CRT_DIR
+		printf "GB\nLondon\nLondon\nUCL\nNCS\nlocalhost\nfoo@localhost\n" | sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout $SSL_CRT_DIR/nginx.key -out $SSL_CRT_DIR/nginx.cert
 	fi
 
 	cd $BPATH
