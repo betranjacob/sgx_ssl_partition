@@ -298,12 +298,10 @@ cmd_master_sec(cmd_pkt_t cmd_pkt, unsigned char* data)
       sgx_sess->premaster_secret, sgx_sess->premaster_secret_length,
       sgx_sess->s->session->master_key, buf, sizeof(buf));
 
-  int i;
   fprintf(stdout, "master key:\n");
-  for(i = 0; i < SSL_MAX_MASTER_KEY_LENGTH; i++){
-    fprintf(stdout, "%x", sgx_sess->s->session->master_key[i]);
-  }
-  fprintf(stdout, "\n");
+  print_hex(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+
+  sgxbridge_pipe_write(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
 }
 
 void
