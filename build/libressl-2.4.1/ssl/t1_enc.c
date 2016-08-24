@@ -774,7 +774,8 @@ tls1_setup_key_block(SSL *s)
 		goto err;
 	}
 
-#ifdef OPENSSL_WITH_SGX
+// #ifdef OPENSSL_WITH_SGX
+#if 0
         // this pipe write is temporary, explicitly ask enclave to generate
         // key block until this logic is completely isolated in the enclave
         fprintf(stdout, "delegating key block generation to enclave \n");
@@ -1184,7 +1185,8 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
 		}
 	}
 
-#ifdef OPENSSL_WITH_SGX
+// #ifdef OPENSSL_WITH_SGX
+#if 0
         fprintf(stdout, "delegating final finish MAC to enclave \n");
 
         sgxbridge_st sgxb;
@@ -1312,12 +1314,7 @@ tls1_generate_master_secret(SSL *s, unsigned char *out, unsigned char *p,
     int len)
 {
 #ifdef OPENSSL_WITH_SGX
-        long algo2 = ssl_get_algorithm2(s);
-        sgxbridge_pipe_write_cmd(s,
-            CMD_MASTER_SEC,
-            sizeof(algo2),
-            (unsigned char *) &algo2);
-        s->session->master_key_length = SSL3_MASTER_SECRET_SIZE;
+        s->session->master_key_length = sgxbridge_get_master_secret(s, s->session->master_key);
 #else
 	unsigned char buff[SSL_MAX_MASTER_KEY_LENGTH];
 
