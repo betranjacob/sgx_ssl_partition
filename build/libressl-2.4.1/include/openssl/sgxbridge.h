@@ -9,6 +9,7 @@
 #define CMD_SRV_RAND 			0x02
 #define CMD_PREMASTER 			0x03
 #define CMD_MASTER_SEC 			0x04
+#define CMD_RSA_MASTER_SEC  0x05
 #define CMD_RSA_SIGN 			0x06
 #define CMD_RSA_SIGN_SIG_ALG 		0x07
 #define CMD_KEY_BLOCK 			0x08
@@ -17,6 +18,7 @@
 #define CMD_GET_ECDHE_PRE_MASTER   	0x0B
 #define CMD_SSL_HANDSHAKE_DONE     	0x0C
 #define CMD_SSL_SESSION_REMOVE   	0x0D
+#define CMD_ECDHE_MASTER_SEC  0x0E
 
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
@@ -31,6 +33,10 @@ void sgxbridge_pipe_write_cmd_remove_session(unsigned char* session_id);
 void print_hex(unsigned char* buf, int len);
 void sgxbridge_generate_server_random(SSL* s, void* buf, int nbytes);
 int sgxbridge_get_master_secret(SSL* s, unsigned char* buf);
+int sgxbridge_rsa_get_master_secret(SSL *s, int premaster_len,
+  unsigned char* premaster);
+int sgxbridge_ecdhe_get_master_secret(SSL *s, int k_size,
+  unsigned char* client_pub);
 void sgxbridge_rsa_sign_md(SSL* s, unsigned char* ip_md, int md_size,
     unsigned char* op_sig, int* sig_size);
 void
@@ -65,4 +71,11 @@ typedef struct
   int data_len;
   char data[CMD_MAX_BUF_SIZE];
 } cmd_pkt_t;
+
+typedef struct
+{
+  unsigned char buf[512];  // to be safe for 4096 bit keys?
+  int len;
+  long algo2;
+} premaster_pkt_t;
 #endif /* _SGXBRIDGE_H_ */

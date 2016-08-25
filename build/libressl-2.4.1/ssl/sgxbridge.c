@@ -234,6 +234,42 @@ sgxbridge_get_master_secret(SSL *s, unsigned char* buf)
   return SSL3_MASTER_SECRET_SIZE;
 }
 
+int
+sgxbridge_rsa_get_master_secret(SSL *s, int premaster_len, unsigned char* premaster)
+{
+  premaster_pkt_t premaster_pkt;
+
+  memcpy(premaster_pkt.buf, premaster, premaster_len);
+  premaster_pkt.algo2 = ssl_get_algorithm2(s);
+  premaster_pkt.len = premaster_len;
+
+  sgxbridge_pipe_write_cmd(s, CMD_RSA_MASTER_SEC, sizeof(premaster_pkt_t), (unsigned char*)&premaster_pkt);
+
+  // read in the master secret
+  sgxbridge_pipe_read(SSL3_MASTER_SECRET_SIZE, s->session->master_key);
+
+  return SSL3_MASTER_SECRET_SIZE;
+}
+
+int
+sgxbridge_ecdhe_get_master_secret(SSL *s, int k_size, unsigned char* client_pub)
+{
+  premaster_pkt_t premaster_pkt;
+
+  memcpy(premaster_pkt.buf, client_pub, k_size);
+  premaster_pkt.algo2 = ssl_get_algorithm2(s);
+  premaster_pkt.len = k_size;
+
+  sgxbridge_pipe_write_cmd(s, CMD_ECDHE_MASTER_SEC, sizeof(premaster_pkt_t), (unsigned char*)&premaster_pkt);
+
+  // read in the master secret
+  sgxbridge_pipe_read(SSL3_MASTER_SECRET_SIZE, s->session->master_key);
+
+  return SSL3_MASTER_SECRET_SIZE;
+}
+
+
+
 void
 sgxbridge_rsa_sign_md(SSL *s,
     unsigned char* ip_md,

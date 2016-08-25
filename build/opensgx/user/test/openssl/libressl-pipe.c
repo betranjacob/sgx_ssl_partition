@@ -148,6 +148,8 @@ register_commands()
   register_command(CMD_SRV_RAND, cmd_srv_rand);
   register_command(CMD_PREMASTER, cmd_premaster);
   register_command(CMD_MASTER_SEC, cmd_master_sec);
+  register_command(CMD_RSA_MASTER_SEC, cmd_rsa_master_sec);
+  register_command(CMD_ECDHE_MASTER_SEC, cmd_ecdhe_master_sec);
   register_command(CMD_RSA_SIGN, cmd_rsa_sign);
   register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
   register_command(CMD_KEY_BLOCK, cmd_key_block);
@@ -294,23 +296,70 @@ cmd_premaster(int data_len, unsigned char* data)
       sgx_sess->premaster_secret_length);
 }
 
+int
+generate_master_secret(SGX_SESSION *sess, long algo2)
+{
+  int ret;
+  unsigned char buf[SSL_MAX_MASTER_KEY_LENGTH];
+
+  ret = tls1_PRF(algo2,
+      TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
+      sess->client_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sess->server_random, SSL3_RANDOM_SIZE, NULL, 0,
+      sess->premaster_secret, sess->premaster_secret_length,
+      sess->master_key, buf, sizeof(buf));
+
+  fprintf(stdout, "master key:\n");
+  print_hex(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+
+  return ret;
+}
+
 void
 cmd_master_sec(int data_len, unsigned char* data)
 {
   int ret;
   long *algo2 = (long *) data;
-  unsigned char buf[SSL_MAX_MASTER_KEY_LENGTH];
 
-  ret = tls1_PRF(*algo2,
-      TLS_MD_MASTER_SECRET_CONST, TLS_MD_MASTER_SECRET_CONST_SIZE,
-      sgx_sess->client_random, SSL3_RANDOM_SIZE, NULL, 0,
-      sgx_sess->server_random, SSL3_RANDOM_SIZE, NULL, 0,
-      sgx_sess->premaster_secret, sgx_sess->premaster_secret_length,
-      sgx_sess->master_key, buf, sizeof(buf));
+  ret = generate_master_secret(sgx_sess, *algo2);
 
-  fprintf(stdout, "master key:\n");
-  print_hex(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+  sgxbridge_pipe_write(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+}
 
+void
+cmd_rsa_master_sec(int data_len, unsigned char* data)
+{
+  int ret;
+  premaster_pkt_t *premaster_pkt;
+
+  premaster_pkt = (premaster_pkt_t*) data;
+
+  // decrypt premaster secret (TODO: need to do anyt with i?)
+  sgx_sess->premaster_secret_length =
+    RSA_private_decrypt(premaster_pkt->len,
+        premaster_pkt->buf, sgx_sess->premaster_secret, rsa, RSA_PKCS1_PADDING);
+
+  ret = generate_master_secret(sgx_sess, premaster_pkt->algo2);
+
+  // Send the master key
+  sgxbridge_pipe_write(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+}
+
+void
+cmd_ecdhe_master_sec(int data_len, unsigned char* data)
+{
+  int ret;
+  premaster_pkt_t *premaster_pkt;
+
+  premaster_pkt = (premaster_pkt_t*) data;
+
+  // generate premaster from ecdhe public key
+  cmd_ecdhe_generate_pre_master_key(premaster_pkt->len, &premaster_pkt->buf);
+  
+  // generate mester secret
+  ret = generate_master_secret(sgx_sess, premaster_pkt->algo2);
+
+  // Send the master key
   sgxbridge_pipe_write(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
 }
 

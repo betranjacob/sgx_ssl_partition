@@ -71,6 +71,8 @@ void cmd_clnt_rand(int data_len, unsigned char* data);
 void cmd_srv_rand(int data_len, unsigned char* data);
 void cmd_premaster(int data_len, unsigned char* data);
 void cmd_master_sec(int data_len, unsigned char* data);
+void cmd_rsa_master_sec(int data_len, unsigned char* data);
+void cmd_ecdhe_master_sec(int data_len, unsigned char* data);
 void cmd_rsa_sign(int data_len, unsigned char* data);
 void cmd_rsa_sign_sig_alg(int data_len, unsigned char* data);
 void cmd_key_block(int data_len, unsigned char *data);

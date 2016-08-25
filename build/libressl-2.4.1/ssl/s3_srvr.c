@@ -1775,7 +1775,9 @@ ssl3_get_client_key_exchange(SSL *s)
 		printf("Encrypted Pre-Master secret size(%d) : ", n);
 		print_hex(p, n);
 
-		sgxbridge_pipe_write_cmd(s, CMD_PREMASTER, (int) n, p);
+		s->session->master_key_length = sgxbridge_rsa_get_master_secret(s,
+			n, p);
+		explicit_bzero(p, n);
 #else
 		i = RSA_private_decrypt((int)n, p, p, rsa, RSA_PKCS1_PADDING);
 
@@ -1840,13 +1842,12 @@ ssl3_get_client_key_exchange(SSL *s)
 			i = SSL_MAX_MASTER_KEY_LENGTH;
 			p = fakekey;
 		}
+
+        s->session->master_key_length =
+            s->method->ssl3_enc->generate_master_secret(
+                    s, s->session->master_key, p, i);
+        explicit_bzero(p, i);
 #endif
-
-                s->session->master_key_length =
-                        s->method->ssl3_enc->generate_master_secret(
-                                s, s->session->master_key, p, i);
-
-		explicit_bzero(p, i);
 	} else if (alg_k & SSL_kDHE) {
 		printf("alg_k: SSL_kDHE\n");
 		if (2 > n)
@@ -1933,10 +1934,13 @@ ssl3_get_client_key_exchange(SSL *s)
 		i = *p; // Get the Key Size.
 		p += 1; // Increment pointer to Key data.
 		printf(" Total size - [%d], KeySize [%d] \n", n, i);
-		sgxbridge_ecdhe_generate_pre_master_key(s, p, i);
-		s->session->master_key_length =
-                  s->method->ssl3_enc->generate_master_secret(s,
-                      s->session->master_key, pre_master, key_size);
+		// sgxbridge_ecdhe_generate_pre_master_key(s, p, i);
+		// s->session->master_key_length =
+  //                 s->method->ssl3_enc->generate_master_secret(s,
+  //                     s->session->master_key, pre_master, key_size);
+
+  		s->session->master_key_length = 
+			sgxbridge_ecdhe_get_master_secret(s, i, p);
 #else
 
 		group = EC_KEY_get0_group(tkey); // Get group Key
