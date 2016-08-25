@@ -43,16 +43,12 @@ typedef struct
 {
   unsigned short int type;
   unsigned char id[SGX_SESSION_ID_LENGTH];
-
-  unsigned char* client_random;
-  unsigned char* server_random;
-  unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
   int premaster_secret_length;
   unsigned char premaster_secret[SSL_MAX_PRE_MASTER_KEY_LENGTH];
-  long algo;
 
   EC_KEY *ecdh;
 
+  SSL *s;
 } SGX_SESSION;
 
 DECLARE_LHASH_OF(SGX_SESSION);
