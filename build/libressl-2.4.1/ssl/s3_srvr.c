@@ -1535,6 +1535,12 @@ ssl3_send_server_key_exchange(SSL *s)
 			 * and p points to the space at the end.
 			 */
 			if (pkey->type == EVP_PKEY_RSA && !SSL_USE_SIGALGS(s)) {
+
+#ifdef OPENSSL_WITH_SGX
+				printf("Message Digest : Length(%d) => ", j);
+				sgxbridge_rsa_sign_md(s, d, n, &(p[2]), &u);
+				printf("Signature : Length(%d) => ", u);
+#else
 				q = md_buf;
 				j = 0;
 				for (num = 2; num > 0; num--) {
@@ -1554,11 +1560,6 @@ ssl3_send_server_key_exchange(SSL *s)
 					q += i;
 					j += i;
 				}
-#ifdef OPENSSL_WITH_SGX
-				printf("Message Digest : Length(%d) => ", j);
-				sgxbridge_rsa_sign_md(s, md_buf, j, &(p[2]), &u);
-				printf("Signature : Length(%d) => ", u);
-#else
 				if (RSA_sign(NID_md5_sha1, md_buf, j,
 				    &(p[2]), &u, pkey->pkey.rsa) <= 0) {
 					SSLerr(SSL_F_SSL3_SEND_SERVER_KEY_EXCHANGE,

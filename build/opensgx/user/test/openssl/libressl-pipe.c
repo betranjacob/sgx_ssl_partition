@@ -316,27 +316,47 @@ cmd_master_sec(int data_len, unsigned char* data)
   fprintf(stdout, "\n");
 }
 
-void
-cmd_rsa_sign(int data_len, unsigned char* data)
+void cmd_rsa_sign(int data_len, unsigned char* data)
 {
-  unsigned char* md_buf = (unsigned char *) data;
-  unsigned char signature[512];
+  unsigned char md_buf[512], signature[512], *q;
   unsigned int sig_size = 0;
+  EVP_MD_CTX md_ctx;
+ 
+  int i = 0,
+      j = 0,
+      num = 0;
 
-  printf("\n Message Digest : len(%d) ", data_len);
+  EVP_MD_CTX_init(&md_ctx);
+  q = md_buf;
+  for (num = 2; num > 0; num--) {
+	  if (!EVP_DigestInit_ex(&md_ctx,
+			(num == 2) ? EVP_get_digestbyname("MD5") : EVP_get_digestbyname("SHA1"), NULL)) {
+		      		puts("Error EVP_DigestInit_ex failed() \n");
+		  	  	return;
+		}
 
-  if (RSA_sign(NID_md5_sha1, md_buf, data_len, signature, &sig_size,
+	  EVP_DigestUpdate(&md_ctx, sgx_sess->client_random,
+	  SSL3_RANDOM_SIZE);
+   	  EVP_DigestUpdate(&md_ctx, sgx_sess->server_random,
+	  SSL3_RANDOM_SIZE);
+	  EVP_DigestUpdate(&md_ctx, data, data_len);
+	  EVP_DigestFinal_ex(&md_ctx, q, (unsigned int *) &i);
+	  q += i;
+	  j += i;
+	}
+
+  printf("\n Message Digest : len(%d) ", j);
+
+  if (RSA_sign(NID_md5_sha1, md_buf, j, signature, &sig_size,
                private_key->pkey.rsa) <= 0) {
     puts("Error Signing message Digest \n");
   }
 
   printf("\n Signature : len(%d) ", sig_size);
-  // print_hex(signature, sig_size);
 
   sgxbridge_pipe_write((unsigned char *) &sig_size, sizeof(int));
   sgxbridge_pipe_write((unsigned char *) signature, sig_size);
 }
-
 void
 cmd_rsa_sign_sig_alg(int data_len, unsigned char* data)
 {
