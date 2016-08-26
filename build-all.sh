@@ -3,8 +3,8 @@
 #export LIBRESSL_SGX_FLAGS="--enable-sgx"
 export LIBRESSL_SGX_FLAGS="--enable-sgx --enable-sgx-keyblock"
 
-#export BUSYWAIT_SGX_FAGS=""
-export BUSYWAIT_SGX_FAGS="-DOPENSSL_WITH_SGX_KEYBLOCK"
+#export BUSYWAIT_SGX_FLAGS=""
+export BUSYWAIT_SGX_FLAGS="-DOPENSSL_WITH_SGX_KEYBLOCK"
 
 # this is so that we dont have to wait to input password
 sudo ls
@@ -15,15 +15,15 @@ mkdir build/opensgx/libsgx/libressl  # dont think this is needed
 rm -rf build/busywait/libressl
 mkdir build/busywait/libressl        # dont think this is needed
 cd build/libressl-2.4.1/
-make clean
+sudo make clean
 cd ../../
 cp -r build/libressl-2.4.1/* build/opensgx/libsgx/libressl/
 cp -r build/libressl-2.4.1/* build/busywait/libressl/
 cd build/opensgx/libsgx
-make clean
+sudo make clean
 cd ../
 cd user
-make clean
+sudo make clean
 cd ../
 
 # build opensgx
@@ -72,3 +72,4 @@ cp ../opensgx/user/test/openssl/libressl-pipe.c ./
 cp ../opensgx/user/test/openssl/libressl-pipe.h ./
 make CFLAGS=$BUSYWAIT_SGX_FLAGS
 cd ../..
+
