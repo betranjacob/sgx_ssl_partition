@@ -36,8 +36,10 @@ SGX_SESSION *sgx_sess;
 
 // TODO: make it uniform with the script (crt / cert)
 // has to be the same file you use for nginx
-char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
-char cert_file[] = "/etc/nginx/ssl/nginx.cert";
+// char priv_key_file[] = "/etc/nginx/ssl/nginx.key";
+// char cert_file[] = "/etc/nginx/ssl/nginx.cert";
+char priv_key_file[] = "/usr/local/nginx/conf/nginx.key";
+char cert_file[] = "/usr/local/nginx/conf/nginx.cert";
 
 /* main operation. communicate with tor-gencert & tor process */
 void
