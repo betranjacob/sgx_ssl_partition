@@ -164,10 +164,6 @@
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 
-#ifdef OPENSSL_WITH_SGX
-#include <openssl/sgxbridge.h>
-#endif
-
 #include "bytestring.h"
 
 #define ENTER() fprintf(stderr, "%s >>Enter>> %s() \n", __FILE__, __func__);
@@ -618,7 +614,13 @@ ssl3_accept(SSL *s)
 				goto end;
 			s->state = SSL3_ST_SW_FINISHED_A;
 			s->init_num = 0;
-
+#ifdef OPENSSL_WITH_SGX
+                        if(!sgxbridge_change_cipher_state(s,
+                              SSL3_CHANGE_CIPHER_SERVER_WRITE)){
+				ret = -1;
+				goto end;
+			}
+#endif
 			if (!s->method->ssl3_enc->change_cipher_state(
 			    s, SSL3_CHANGE_CIPHER_SERVER_WRITE)) {
 				ret = -1;

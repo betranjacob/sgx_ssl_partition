@@ -35,7 +35,7 @@
 
 typedef struct
 {
-  void (*callback)(int, unsigned char*);
+  void (*callback)(cmd_pkt_t, unsigned char*);
   int cmd_num;
 } cmd_t;
 
@@ -43,16 +43,12 @@ typedef struct
 {
   unsigned short int type;
   unsigned char id[SGX_SESSION_ID_LENGTH];
-
-  unsigned char* client_random;
-  unsigned char* server_random;
-  unsigned char master_key[SSL3_MASTER_SECRET_SIZE];
   int premaster_secret_length;
   unsigned char premaster_secret[SSL_MAX_PRE_MASTER_KEY_LENGTH];
-  long algo;
 
   EC_KEY *ecdh;
 
+  SSL *s;
 } SGX_SESSION;
 
 DECLARE_LHASH_OF(SGX_SESSION);
@@ -60,25 +56,27 @@ DECLARE_LHASH_OF(SGX_SESSION);
 // prototypes
 void open_pipes();
 void load_pKey_and_cert_to_ssl_ctx();
-void register_command(int cmd, void (*callback)(int, unsigned char*));
+void register_command(int cmd, void (*callback)(cmd_pkt_t, unsigned char*));
 void register_commands();
-void check_commands(int cmd, int data_len, unsigned char* data);
+void check_commands(cmd_pkt_t cmd_pkt, unsigned char* data);
 void init_session(SGX_SESSION *sgx_s);
 void run_command_loop();
 
 // TODO: write a macro for commands
-void cmd_clnt_rand(int data_len, unsigned char* data);
-void cmd_srv_rand(int data_len, unsigned char* data);
-void cmd_premaster(int data_len, unsigned char* data);
-void cmd_master_sec(int data_len, unsigned char* data);
-void cmd_rsa_sign(int data_len, unsigned char* data);
-void cmd_rsa_sign_sig_alg(int data_len, unsigned char* data);
-void cmd_key_block(int data_len, unsigned char *data);
-void cmd_final_finish_mac(int data_len, unsigned char *data);
-void cmd_ecdhe_get_public_param(int data_len, unsigned char* data);
-void cmd_ecdhe_generate_pre_master_key(int data_len, unsigned char* data);
-void cmd_ssl_handshake_done(int data_len, unsigned char* data);
-void cmd_ssl_session_remove(int data_len, unsigned char* data);
+void cmd_clnt_rand(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_srv_rand(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_premaster(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_master_sec(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_rsa_sign(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_rsa_sign_sig_alg(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_key_block(cmd_pkt_t cmd_pkt, unsigned char *data);
+void cmd_final_finish_mac(cmd_pkt_t cmd_pkt, unsigned char *data);
+void cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_ecdhe_generate_pre_master_key(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_ssl_handshake_done(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_ssl_session_remove(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_change_cipher_state(cmd_pkt_t cmd_pkt, unsigned char* data);
+void cmd_sgx_tls1_enc(cmd_pkt_t cmd_pkt, unsigned char *data);
 
 extern int cmd_counter;
 extern EVP_PKEY* private_key;
