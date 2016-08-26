@@ -248,6 +248,7 @@ run_command_loop()
     // we shouldnt really end up here in normal conditions
     // sgxbridge_fetch_operation does a blocking read on named pipes
     //puts("empty\n");
+    sgx_exit(NULL);
   }
 }
 
