@@ -1308,9 +1308,9 @@ ssl3_do_change_cipher_spec(SSL *s)
 			return (0);
 	}
 
-#ifdef OPENSSL_WITH_SGX
-        if(!sgxbridge_change_cipher_state(s, SSL3_CHANGE_CIPHER_SERVER_READ))
-                return (0);
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+    if(!sgxbridge_change_cipher_state(s, SSL3_CHANGE_CIPHER_SERVER_READ))
+		return (0);
 #endif
 	if (!s->method->ssl3_enc->change_cipher_state(s, i))
 		return (0);

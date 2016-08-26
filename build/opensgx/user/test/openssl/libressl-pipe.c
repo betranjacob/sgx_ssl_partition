@@ -143,14 +143,18 @@ register_commands()
   register_command(CMD_MASTER_SEC, cmd_master_sec);
   register_command(CMD_RSA_SIGN, cmd_rsa_sign);
   register_command(CMD_RSA_SIGN_SIG_ALG, cmd_rsa_sign_sig_alg);
-  register_command(CMD_KEY_BLOCK, cmd_key_block);
-  register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
   register_command(CMD_GET_ECDHE_PUBLIC_PARAM, cmd_ecdhe_get_public_param);
-  register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master_key);
+  register_command(CMD_GET_ECDHE_PRE_MASTER, cmd_ecdhe_generate_pre_master);
   register_command(CMD_SSL_HANDSHAKE_DONE, cmd_ssl_handshake_done);
   register_command(CMD_SSL_SESSION_REMOVE, cmd_ssl_session_remove);
+  
+  // #ifdef OPENSSL_WITH_SGX_KEYBLOCK
+  register_command(CMD_KEY_BLOCK, cmd_key_block);
+  register_command(CMD_FINAL_FINISH_MAC, cmd_final_finish_mac);
   register_command(CMD_CHANGE_CIPHER_STATE, cmd_change_cipher_state);
   register_command(CMD_SGX_TLS1_ENC, cmd_sgx_tls1_enc);
+  // #endif
+
 }
 
 // needs to be called before the command can be used
@@ -300,9 +304,12 @@ cmd_master_sec(cmd_pkt_t cmd_pkt, unsigned char* data)
       sgx_sess->s->session->master_key, buf, sizeof(buf));
 
   fprintf(stdout, "master key:\n");
-  print_hex(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+  print_hex(sgx_sess->s->session->master_key, SSL_MAX_MASTER_KEY_LENGTH);
 
-  sgxbridge_pipe_write(sgx_sess->master_key, SSL_MAX_MASTER_KEY_LENGTH);
+#ifndef OPENSSL_WITH_SGX_KEYBLOCK
+  sgxbridge_pipe_write(sgx_sess->s->session->master_key,
+      SSL_MAX_MASTER_KEY_LENGTH);
+#endif
 }
 
 void
@@ -551,7 +558,7 @@ void cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data)
   free(ep);
 }
 
-void cmd_ecdhe_generate_pre_master_key(cmd_pkt_t cmd_pkt, unsigned char* data)
+void cmd_ecdhe_generate_pre_master(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   EC_POINT *clnt_ecpoint = NULL;
   BN_CTX *bn_ctx = NULL;

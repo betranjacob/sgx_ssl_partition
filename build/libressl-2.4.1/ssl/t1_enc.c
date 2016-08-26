@@ -770,30 +770,29 @@ tls1_setup_key_block(SSL *s)
 		goto err;
 	}
 
-// #ifdef OPENSSL_WITH_SGX
-#if 0
-        // this pipe write is temporary, explicitly ask enclave to generate
-        // key block until this logic is completely isolated in the enclave
-        fprintf(stdout, "delegating key block generation to enclave \n");
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+    // this pipe write is temporary, explicitly ask enclave to generate
+    // key block until this logic is completely isolated in the enclave
+    fprintf(stdout, "delegating key block generation to enclave \n");
 
-        sgxbridge_st sgxb;
-        sgxb.key_block_len = key_block_len;
-        sgxb.algo2 = ssl_get_algorithm2(s);
+    sgxbridge_st sgxb;
+    sgxb.key_block_len = key_block_len;
+    sgxb.algo2 = ssl_get_algorithm2(s);
 
-        sgxbridge_pipe_write_cmd(s,
-                CMD_KEY_BLOCK,
-                sizeof(sgxbridge_st),
-                (unsigned char *) &sgxb);
-        sgxbridge_pipe_read(key_block_len, (char *) key_block);
+    sgxbridge_pipe_write_cmd(s,
+            CMD_KEY_BLOCK,
+            sizeof(sgxbridge_st),
+            (unsigned char *) &sgxb);
+    sgxbridge_pipe_read(key_block_len, (char *) key_block);
 
-        if(key_block_len == 1)
-            goto err;
+    if(key_block_len == 1)
+        goto err;
 
-        int i;
-        fprintf(stdout, "keyblock (%d):\n", key_block_len);
-        for(i = 0; i < key_block_len; i++)
-            fprintf(stdout, "%x", key_block[i]);
-        fprintf(stdout, "\n");
+    int i;
+    fprintf(stdout, "keyblock (%d):\n", key_block_len);
+    for(i = 0; i < key_block_len; i++)
+        fprintf(stdout, "%x", key_block[i]);
+    fprintf(stdout, "\n");
 #else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
@@ -937,10 +936,10 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
-#ifdef OPENSSL_WITH_SGX
-                        if(!sgxbridge_pipe_tls1_enc(s, len, eivlen,
-                            nonce_used, nonce, ad, in, out, &out_len, send))
-                               return -1;
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+            if(!sgxbridge_pipe_tls1_enc(s, len, eivlen,
+                nonce_used, nonce, ad, in, out, &out_len, send))
+                   return -1;
 #else
 			if (!EVP_AEAD_CTX_seal(&aead->ctx,
 			    out + eivlen, &out_len, len + aead->tag_len, nonce,
@@ -996,10 +995,10 @@ tls1_enc(SSL *s, int send)
 			ad[11] = len >> 8;
 			ad[12] = len & 0xff;
 
-#ifdef OPENSSL_WITH_SGX
-                        if(!sgxbridge_pipe_tls1_enc(s, len, aead->tag_len,
-                              nonce_used, nonce, ad, in, out, &out_len, send))
-                                return -1;
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+            if(!sgxbridge_pipe_tls1_enc(s, len, aead->tag_len,
+                  nonce_used, nonce, ad, in, out, &out_len, send))
+                    return -1;
 #else
 			if (!EVP_AEAD_CTX_open(&aead->ctx, out, &out_len, len,
 			    nonce, nonce_used, in, len + aead->tag_len, ad,
@@ -1193,32 +1192,31 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
 		}
 	}
 
-// #ifdef OPENSSL_WITH_SGX
-#if 0
-        fprintf(stdout, "delegating final finish MAC to enclave \n");
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+    fprintf(stdout, "delegating final finish MAC to enclave \n");
 
-        sgxbridge_st sgxb;
-        sgxb.key_block_len = (int) (q - buf);
-        sgxb.algo2 = ssl_get_algorithm2(s);
-        strncpy(sgxb.str, str, slen);
-        sgxb.str_len = slen;
-        memcpy(sgxb.buf, buf, (int) (q - buf));
+    sgxbridge_st sgxb;
+    sgxb.key_block_len = (int) (q - buf);
+    sgxb.algo2 = ssl_get_algorithm2(s);
+    strncpy(sgxb.str, str, slen);
+    sgxb.str_len = slen;
+    memcpy(sgxb.buf, buf, (int) (q - buf));
 
-        sgxbridge_pipe_write_cmd(s,
-                CMD_FINAL_FINISH_MAC,
-                sizeof(sgxbridge_st),
-                (unsigned char *) &sgxb);
-        sgxbridge_pipe_read(2 * EVP_MAX_MD_SIZE, (char *) out);
+    sgxbridge_pipe_write_cmd(s,
+            CMD_FINAL_FINISH_MAC,
+            sizeof(sgxbridge_st),
+            (unsigned char *) &sgxb);
+    sgxbridge_pipe_read(2 * EVP_MAX_MD_SIZE, (char *) out);
 
-        if(sgxb.key_block_len == 1)
-            err = 1;
+    if(sgxb.key_block_len == 1)
+        err = 1;
 
-        fprintf(stdout, "final finish MAC (%d): %s\n",
-            s->s3->tmp.peer_finish_md_len, str);
+    fprintf(stdout, "final finish MAC (%d): %s\n",
+        s->s3->tmp.peer_finish_md_len, str);
 
-        for(i = 0; i < s->s3->tmp.peer_finish_md_len; i++)
-            fprintf(stdout, "%x", out[i]);
-        fprintf(stdout, "\n");
+    for(i = 0; i < s->s3->tmp.peer_finish_md_len; i++)
+        fprintf(stdout, "%x", out[i]);
+    fprintf(stdout, "\n");
 #else
 	if (!tls1_PRF(ssl_get_algorithm2(s), str, slen, buf, (int)(q - buf),
 	    NULL, 0, NULL, 0, NULL, 0,

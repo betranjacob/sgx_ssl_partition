@@ -614,9 +614,9 @@ ssl3_accept(SSL *s)
 				goto end;
 			s->state = SSL3_ST_SW_FINISHED_A;
 			s->init_num = 0;
-#ifdef OPENSSL_WITH_SGX
-                        if(!sgxbridge_change_cipher_state(s,
-                              SSL3_CHANGE_CIPHER_SERVER_WRITE)){
+#if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
+            if(!sgxbridge_change_cipher_state(s,
+                SSL3_CHANGE_CIPHER_SERVER_WRITE)){
 				ret = -1;
 				goto end;
 			}

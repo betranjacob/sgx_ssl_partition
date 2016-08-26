@@ -268,7 +268,9 @@ sgxbridge_get_master_secret(SSL *s, unsigned char* buf)
             sizeof(algo2),
             (unsigned char *) &algo2);
 
+#ifndef OPENSSL_WITH_SGX_KEYBLOCK
   sgxbridge_pipe_read(SSL3_MASTER_SECRET_SIZE, buf);
+#endif
 
   return SSL3_MASTER_SECRET_SIZE;
 }
