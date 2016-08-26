@@ -638,6 +638,8 @@ HOST_ASM_MACOSX_X86_64_FALSE
 HOST_ASM_MACOSX_X86_64_TRUE
 HOST_ASM_ELF_X86_64_FALSE
 HOST_ASM_ELF_X86_64_TRUE
+OPENSSL_WITH_SGX_KEYBLOCK_FALSE
+OPENSSL_WITH_SGX_KEYBLOCK_TRUE
 OPENSSL_WITH_SGX_FALSE
 OPENSSL_WITH_SGX_TRUE
 OPENSSL_NO_ASM_FALSE
@@ -860,6 +862,7 @@ with_openssldir
 enable_extratests
 enable_asm
 enable_sgx
+enable_sgx_keyblock
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1509,7 +1512,9 @@ Optional Features:
   --enable-extratests     Enable extra tests that may be unreliable on some
                           platforms
   --disable-asm           Disable assembly
-  --enable-sgx            Load SSL private key and secrets within an enclave
+  --enable-sgx            Load SSL private key within an enclave
+  --enable-sgx-keyblock   Load SSL private key and session keys within an
+                          enclave (requires --enable-sgx)
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -13741,6 +13746,20 @@ else
 fi
 
 
+# Check whether --enable-sgx_keyblock was given.
+if test "${enable_sgx_keyblock+set}" = set; then :
+  enableval=$enable_sgx_keyblock;
+fi
+
+ if test "x$enable_sgx_keyblock" = "xyes"; then
+  OPENSSL_WITH_SGX_KEYBLOCK_TRUE=
+  OPENSSL_WITH_SGX_KEYBLOCK_FALSE='#'
+else
+  OPENSSL_WITH_SGX_KEYBLOCK_TRUE='#'
+  OPENSSL_WITH_SGX_KEYBLOCK_FALSE=
+fi
+
+
 # Conditionally enable assembly by default
  if test "x$HOST_ABI" = "xelf" -a "$host_cpu" = "x86_64" -a "x$enable_asm" != "xno"; then
   HOST_ASM_ELF_X86_64_TRUE=
@@ -14147,6 +14166,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${OPENSSL_WITH_SGX_TRUE}" && test -z "${OPENSSL_WITH_SGX_FALSE}"; then
   as_fn_error $? "conditional \"OPENSSL_WITH_SGX\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${OPENSSL_WITH_SGX_KEYBLOCK_TRUE}" && test -z "${OPENSSL_WITH_SGX_KEYBLOCK_FALSE}"; then
+  as_fn_error $? "conditional \"OPENSSL_WITH_SGX_KEYBLOCK\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${HOST_ASM_ELF_X86_64_TRUE}" && test -z "${HOST_ASM_ELF_X86_64_FALSE}"; then

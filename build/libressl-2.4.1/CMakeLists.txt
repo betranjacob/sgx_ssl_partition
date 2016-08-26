@@ -25,7 +25,8 @@ string(REGEX REPLACE "\\..*" "" TLS_MAJOR_VERSION ${TLS_VERSION})
 
 option(ENABLE_ASM "Enable assembly" ON)
 option(ENABLE_EXTRATESTS "Enable extra tests that may be unreliable on some platforms" OFF)
-option(ENABLE_SGX "Load SSL private key and secrets within an enclave" OFF)
+option(ENABLE_SGX "Load SSL private key within an SGX enclave" OFF)
+option(ENABLE_SGX_KEYBLOCK "Load SSL private key and session key block within an SGX enclave (requires --enable-sgx)" OFF)
 option(ENABLE_NC "Enable installing TLS-enabled nc(1)" OFF)
 set(OPENSSLDIR ${OPENSSLDIR} CACHE PATH "Set the default openssl directory" FORCE)
 
@@ -247,6 +248,10 @@ endif()
 
 if(ENABLE_SGX)
         add_definitions(-DOPENSSL_WITH_SGX)
+endif()
+
+if(ENABLE_SGX_KEYBLOCK)
+        add_definitions(-DOPENSSL_WITH_SGX_KEYBLOCK)
 endif()
 
 add_definitions(-DSIZEOF_TIME_T=${SIZEOF_TIME_T})

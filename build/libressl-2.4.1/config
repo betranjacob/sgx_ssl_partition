@@ -12,6 +12,7 @@ for var in "$@"; do
 		no-asm    ) ARGS="$ARGS --disable-asm";;
 		--prefix* ) ARGS="$ARGS $var";;
 		--enable-sgx ) ARGS="$ARGS --enable-sgx";;
+		--enable-sgx-keyblock ) ARGS="$ARGS --enable-sgx-keyblock";;
 	esac
 done
 

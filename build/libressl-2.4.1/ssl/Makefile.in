@@ -90,6 +90,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 @OPENSSL_WITH_SGX_TRUE@am__append_1 = -DOPENSSL_WITH_SGX
+@OPENSSL_WITH_SGX_KEYBLOCK_TRUE@am__append_2 = -DOPENSSL_WITH_SGX_KEYBLOCK
 subdir = ssl
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/check-hardening-options.m4 \
@@ -342,7 +343,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AM_CFLAGS = 
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/include/compat \
-	-DLIBRESSL_INTERNAL $(am__append_1)
+	-DLIBRESSL_INTERNAL $(am__append_1) $(am__append_2)
 lib_LTLIBRARIES = libssl.la
 EXTRA_DIST = VERSION CMakeLists.txt
 libssl_la_LDFLAGS = -version-info @LIBSSL_VERSION@ -no-undefined

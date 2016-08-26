@@ -109,8 +109,12 @@ AC_ARG_ENABLE([asm],
 AM_CONDITIONAL([OPENSSL_NO_ASM], [test "x$enable_asm" = "xno"])
 
 AC_ARG_ENABLE([sgx],
-	AS_HELP_STRING([--enable-sgx], [Load SSL private key and secrets within an enclave]))
+	AS_HELP_STRING([--enable-sgx], [Load SSL private key within an enclave]))
 AM_CONDITIONAL([OPENSSL_WITH_SGX], [test "x$enable_sgx" = "xyes"])
+
+AC_ARG_ENABLE([sgx_keyblock],
+	AS_HELP_STRING([--enable-sgx-keyblock], [Load SSL private key and session keys within an enclave (requires --enable-sgx)]))
+AM_CONDITIONAL([OPENSSL_WITH_SGX_KEYBLOCK], [test "x$enable_sgx_keyblock" = "xyes"])
 
 # Conditionally enable assembly by default
 AM_CONDITIONAL([HOST_ASM_ELF_X86_64],
