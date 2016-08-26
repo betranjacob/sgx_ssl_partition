@@ -34,7 +34,7 @@ opensgx_pipe_init(int flag_dir)
 
   if (ret == -1) {
     if (errno != EEXIST) {
-      fprintf(stderr, "Fail to mkdir");
+      debug_fprintf(stderr, "Fail to mkdir");
       return -1;
     }
   }
@@ -59,7 +59,7 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
   int ret = mknod(name_buf, S_IFIFO | 0770, 0);
   if (ret == -1) {
     if (errno != EEXIST) {
-      fprintf(stderr, "Fail to mknod");
+      debug_fprintf(stderr, "Fail to mknod");
       return -1;
     }
   }
@@ -73,7 +73,7 @@ opensgx_pipe_open(char* unique_id, int is_write, int flag_dir)
   int fd = open(name_buf, flag);
 
   if (fd == -1) {
-    fprintf(stderr, "Fail to open()");
+    debug_fprintf(stderr, "Fail to open()");
     return -1;
   }
 
@@ -92,12 +92,12 @@ sgxbridge_pipe_read(size_t len, unsigned char* data)
 
   while(num < len){
     if((n = read(fd, data + num, len - num)) <= 0){
-      fprintf(stderr, "SGX read() failed: %s\n", strerror(errno));
+      debug_fprintf(stderr, "SGX read() failed: %s\n", strerror(errno));
 
       return 0;
     } else {
       num += n;
-      fprintf(stdout, "SGX read() %zu out of %zu bytes\n", num, len);
+      debug_fprintf(stdout, "SGX read() %zu out of %zu bytes\n", num, len);
     }
   }
 
@@ -116,12 +116,12 @@ sgxbridge_pipe_write(unsigned char* data, size_t len)
 
   while(num < len){
     if((n = write(fd, data + num, len - num)) < 0){
-      fprintf(stderr, "SGX write() failed: %s\n", strerror(errno));
+      debug_fprintf(stderr, "SGX write() failed: %s\n", strerror(errno));
 
       return -1;
     } else {
       num += n;
-      fprintf(stdout, "SGX write() %zu out of %zu bytes\n", num, len);
+      debug_fprintf(stdout, "SGX write() %zu out of %zu bytes\n", num, len);
     }
   }
 
@@ -137,7 +137,7 @@ sgxbridge_pipe_write_cmd(SSL *s, int cmd, int len, unsigned char* data)
   fd = fd_sgx_ssl;
 #endif
 
-  printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
+  debug_printf("sgxbridge_pipe_write, cmd: %d, len: %d\n", cmd, len);
   print_hex_trim(data, len);
 
   cmd_pkt.cmd = cmd;
@@ -175,17 +175,17 @@ sgxbridge_init()
 #endif
 
   if (opensgx_pipe_init(0) < 0) {
-    fprintf(stderr, "%s - %s Pipe Init() failed \n", __FILE__, __func__);
+    debug_fprintf(stderr, "%s - %s Pipe Init() failed \n", __FILE__, __func__);
     return -1;
   }
 
   if ((fd_sgx_ssl = opensgx_pipe_open("sgx_ssl", mode_sgx_ssl, 0)) < 0) {
-    fprintf(stderr, "%s - %s Read Pipe Open() failed \n", __FILE__, __func__);
+    debug_fprintf(stderr, "%s - %s Read Pipe Open() failed \n", __FILE__, __func__);
     return -1;
   }
 
   if ((fd_ssl_sgx = opensgx_pipe_open("ssl_sgx", mode_ssl_sgx, 0)) < 0) {
-    fprintf(stderr, "%s - %s Write Pipe Open() failed \n", __FILE__, __func__);
+    debug_fprintf(stderr, "%s - %s Write Pipe Open() failed \n", __FILE__, __func__);
     return -1;
   }
 
@@ -201,7 +201,7 @@ sgxbridge_fetch_operation(cmd_pkt_t *cmd_pkt)
 #endif
 
   if (sgxbridge_pipe_read(sizeof(cmd_pkt_t), cmd_pkt) > 0) {
-    printf("fetch_operation, cmd: %d, len: %d\n",
+    debug_printf("fetch_operation, cmd: %d, len: %d\n",
         cmd_pkt->cmd, cmd_pkt->data_len);
     return 1;
   }
@@ -212,7 +212,7 @@ int
 sgxbridge_fetch_data(unsigned char *data, size_t len)
 {
   if (sgxbridge_pipe_read(len, data) > 0) {
-    printf("SGX fetch data (%zu bytes)\n", len);
+    debug_printf("SGX fetch data (%zu bytes)\n", len);
     print_hex_trim(data, len);
     return 1;
   }
@@ -224,10 +224,10 @@ print_hex(unsigned char* buf, int len)
 {
   int cnt;
   for (cnt = 0; cnt < len; cnt++) {
-    printf("%02X", buf[cnt]);
+    debug_printf("%02X", buf[cnt]);
   }
 
-  printf("\n\r");
+  debug_printf("\n\r");
   fflush(stdout);
 }
 
@@ -236,17 +236,17 @@ print_hex_trim(unsigned char *buf, int len){
   int cnt;
 
   for (cnt = 0; cnt < 128; cnt++) {
-    if(cnt < 64) printf("%02X", buf[cnt]);
-    else if(cnt == 64) printf("...");
-    else printf("%02X", buf[len - 128 + cnt]);
+    if(cnt < 64) debug_printf("%02X", buf[cnt]);
+    else if(cnt == 64) debug_printf("...");
+    else debug_printf("%02X", buf[len - 128 + cnt]);
   }
-  printf("\n\r");
+  debug_printf("\n\r");
 }
 
 void
 sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 {
-  printf("generate_server_random\n");
+  debug_printf("generate_server_random\n");
 
   sgxbridge_pipe_write_cmd(s,
       CMD_SRV_RAND,
@@ -255,7 +255,7 @@ sgxbridge_generate_server_random(SSL *s, void* buf, int nbytes)
 
   sgxbridge_pipe_read(nbytes, buf);
 
-  printf("server_random:\n");
+  debug_printf("server_random:\n");
   print_hex((unsigned char *) buf, nbytes);
 }
 

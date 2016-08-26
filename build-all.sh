@@ -6,6 +6,10 @@ export LIBRESSL_SGX_FLAGS="--enable-sgx --enable-sgx-keyblock"
 #export BUSYWAIT_SGX_FLAGS=""
 export BUSYWAIT_SGX_FLAGS="-DOPENSSL_WITH_SGX_KEYBLOCK"
 
+export OPENSSL_SGX_DEBUG=""
+# export OPENSSL_SGX_DEBUG="-DWITH_OPENSSL_SGX_DEBUG"
+
+
 # this is so that we dont have to wait to input password
 sudo ls
 
@@ -41,7 +45,7 @@ cd $LIBRESSL_SGX_PATH
 aclocal
 automake
 autoconf
-./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" $LIBRESSL_SGX_FLAGS --enable-shared=no && make -j 4
+./configure CFLAGS="-nostdlib -DHAVE_TIMEGM -DHAVE_STRSEP -DSGX_ENCLAVE ${OPENSSL_SGX_DEBUG} -I$MUSL_LIBC_PATH/include" LIBS="$MUSL_LIBC_PATH/lib/libc.so" --host="x86_64-linux" $LIBRESSL_SGX_FLAGS --enable-shared=no && make -j 4
 cd ../../../..
 
 cd build/opensgx/
@@ -64,7 +68,7 @@ cd ../../
 
 # build busywait
 cd build/busywait/libressl
-./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE" $LIBRESSL_SGX_FLAGS --host="x86_64-linux"
+./configure LDFLAGS="-lrt -lpthread" CFLAGS="-O0 -g -DSGX_ENCLAVE ${OPENSSL_SGX_DEBUG}" $LIBRESSL_SGX_FLAGS --host="x86_64-linux"
 make -j 4
 cd ..
 make clean

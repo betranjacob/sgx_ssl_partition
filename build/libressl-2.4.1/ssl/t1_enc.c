@@ -146,7 +146,9 @@
 void
 tls1_cleanup_key_block(SSL *s)
 {
-	printf("tls1_cleanup_key_block\n");
+#ifdef  OPENSSL_WITH_SGX
+	debug_printf("tls1_cleanup_key_block\n");
+#endif
 	if (s->s3->tmp.key_block != NULL) {
 		explicit_bzero(s->s3->tmp.key_block,
 		    s->s3->tmp.key_block_length);
@@ -445,7 +447,9 @@ static int
 tls1_change_cipher_state_aead(SSL *s, char is_read, const unsigned char *key,
     unsigned key_len, const unsigned char *iv, unsigned iv_len)
 {
-	printf("tls1_change_cipher_state\n");
+#ifdef  OPENSSL_WITH_SGX
+	debug_printf("tls1_change_cipher_state\n");
+#endif
 	const EVP_AEAD *aead = s->s3->tmp.new_aead;
 	SSL_AEAD_CTX *aead_ctx;
 
@@ -711,7 +715,9 @@ err2:
 int
 tls1_setup_key_block(SSL *s)
 {
-	printf("tls1_setup_key_block\n");
+#ifdef  OPENSSL_WITH_SGX
+	debug_printf("tls1_setup_key_block\n");
+#endif
 	unsigned char *key_block, *tmp_block = NULL;
 	int mac_type = NID_undef, mac_secret_size = 0;
 	int key_block_len, key_len, iv_len;
@@ -773,7 +779,7 @@ tls1_setup_key_block(SSL *s)
 #if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
     // this pipe write is temporary, explicitly ask enclave to generate
     // key block until this logic is completely isolated in the enclave
-    fprintf(stdout, "delegating key block generation to enclave \n");
+    debug_fprintf(stdout, "delegating key block generation to enclave \n");
 
     sgxbridge_st sgxb;
     sgxb.key_block_len = key_block_len;
@@ -788,11 +794,8 @@ tls1_setup_key_block(SSL *s)
     if(key_block_len == 1)
         goto err;
 
-    int i;
-    fprintf(stdout, "keyblock (%d):\n", key_block_len);
-    for(i = 0; i < key_block_len; i++)
-        fprintf(stdout, "%x", key_block[i]);
-    fprintf(stdout, "\n");
+    debug_fprintf(stdout, "keyblock (%d):\n", key_block_len);
+    print_hex(key_block, key_block_len);
 #else
 	if (!tls1_generate_key_block(s, key_block, tmp_block, key_block_len))
 		goto err;
@@ -1193,7 +1196,7 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
 	}
 
 #if (defined OPENSSL_WITH_SGX && defined OPENSSL_WITH_SGX_KEYBLOCK)
-    fprintf(stdout, "delegating final finish MAC to enclave \n");
+    debug_fprintf(stdout, "delegating final finish MAC to enclave \n");
 
     sgxbridge_st sgxb;
     sgxb.key_block_len = (int) (q - buf);
@@ -1211,12 +1214,9 @@ tls1_final_finish_mac(SSL *s, const char *str, int slen, unsigned char *out)
     if(sgxb.key_block_len == 1)
         err = 1;
 
-    fprintf(stdout, "final finish MAC (%d): %s\n",
+    debug_fprintf(stdout, "final finish MAC (%d): %s\n",
         s->s3->tmp.peer_finish_md_len, str);
-
-    for(i = 0; i < s->s3->tmp.peer_finish_md_len; i++)
-        fprintf(stdout, "%x", out[i]);
-    fprintf(stdout, "\n");
+    print_hex(out, s->s3->tmp.peer_finish_md_len);
 #else
 	if (!tls1_PRF(ssl_get_algorithm2(s), str, slen, buf, (int)(q - buf),
 	    NULL, 0, NULL, 0, NULL, 0,

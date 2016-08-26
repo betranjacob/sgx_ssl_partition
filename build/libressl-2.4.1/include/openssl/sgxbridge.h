@@ -26,6 +26,14 @@
 #define NAME_BUF_SIZE 256
 #define ENCODED_POINT_LEN_MAX 256
 
+#ifdef WITH_OPENSSL_SGX_DEBUG
+  #define debug_printf printf
+  #define debug_fprintf fprintf
+#else
+  #define debug_printf(format, args...) ((void)0)
+  #define debug_fprintf(stream, format, args...) ((void)0)
+#endif
+
 typedef struct
 {
   char encodedPoint[ENCODED_POINT_LEN_MAX];
