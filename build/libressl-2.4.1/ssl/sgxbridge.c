@@ -91,10 +91,10 @@ sgxbridge_pipe_read(size_t len, unsigned char* data)
 #endif
 
   while(num < len){
-    if((n = read(fd, data + num, len - num)) < 0){
+    if((n = read(fd, data + num, len - num)) <= 0){
       fprintf(stderr, "SGX read() failed: %s\n", strerror(errno));
 
-      return -1;
+      return 0;
     } else {
       num += n;
       fprintf(stdout, "SGX read() %zu out of %zu bytes\n", num, len);
