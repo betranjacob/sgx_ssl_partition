@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include "noprint.h"
 
 #define SGX_DELAY 1000000
 

@@ -6,6 +6,14 @@
 #include <openssl/ssl3.h>
 #include "../../crypto/evp/evp_locl.h"
 
+#define NOPRINT
+
+#ifdef NOPRINT
+#define printf(...)
+#define fprintf(...)
+#define puts(...)
+#endif /* NOPRINT */
+
 #define CMD_MAX_BUF_SIZE 1024 * 5
 
 #define CMD_CLNT_RAND 			0x01
