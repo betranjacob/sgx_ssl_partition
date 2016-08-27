@@ -21,6 +21,41 @@
 
 static qeid_t qenclaves[MAX_ENCLAVES];
 
+
+static
+void print_perf_count(CPUX86State *env) {
+	
+    secs_t *secs;
+    secs = (secs_t*)env->cregs.CR_ACTIVE_SECS;
+    
+    int64_t eid;
+    eid = secs->eid_reserved.eid_pad.eid;
+	
+    stat_t qstat;
+    qstat = qenclaves[eid].stat;
+    
+    printf("ENCLAVE TERMINATED\n");
+    printf("--------------------------------------------\n");
+    printf("encls count\t: %d\n",qstat.encls_n);
+    printf("ecreate count\t: %d\n",qstat.ecreate_n);
+    printf("eadd count\t: %d\n",qstat.eadd_n);
+    printf("eextend count\t: %d\n",qstat.eextend_n);
+    printf("einit count\t: %d\n",qstat.einit_n);
+    printf("eaug count\t: %d\n",qstat.eaug_n);
+    printf("--------------------------------------------\n");
+    printf("enclu count\t: %d\n",qstat.enclu_n);
+    printf("eenter count\t: %d\n",qstat.eenter_n);
+    printf("eresume count\t: %d\n",qstat.eresume_n);
+    printf("eexit count\t: %d\n",qstat.eexit_n);
+    printf("egetkey count\t: %d\n",qstat.egetkey_n);
+    printf("ereport count\t: %d\n",qstat.ereport_n);
+    printf("eaccept count\t: %d\n",qstat.eaccept_n);
+    printf("--------------------------------------------\n");
+    printf("mode switch count : %d\n",qstat.mode_switch);
+    printf("tlb flush count\t: %d\n",qstat.tlbflush_n);
+    printf("--------------------------------------------\n");
+}
+
 /**
  *  SGX Global Data Structures
  */
@@ -3073,12 +3108,12 @@ void helper_sgx_enclu(CPUX86State *env, uint64_t next_eip)
         case ENCLU_EEXIT:
             env->cregs.CR_NEXT_EIP = next_eip;
             sgx_eexit(env);
-/*
+
 #if PERF
             if(env->regs[R_EBX] == 0)   //print_perf_count is called only when EEXIT(NULL)
                 print_perf_count(env);
 #endif
-*/
+
             break;
         case ENCLU_EGETKEY:
             env->cregs.CR_NEXT_EIP = next_eip;
