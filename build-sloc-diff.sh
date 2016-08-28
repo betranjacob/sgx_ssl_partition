@@ -7,6 +7,7 @@ echo "Diffrence in source code lines for libressl:"
 
 cloc --quiet \
      --exclude-lang=make,CMake,Assembly,'Bourne Again Shell','Bourne Shell',m4 \
+     --exclude-dir='.openssl' \
      --diff build/libressl-2.4.1.tar.gz build/libressl-2.4.1/
 
 echo "Diffrence in source code lines for nginx:"
@@ -18,6 +19,7 @@ cloc --quiet \
 #  save those (all languages) into a csv file
 cloc --quiet \
      --exclude-lang=make,CMake,Assembly,'Bourne Again Shell','Bourne Shell',m4 \
+     --exclude-dir='.openssl' \
      --diff build/libressl-2.4.1.tar.gz build/libressl-2.4.1/ \
      --report-file=./results/libressl_sloc_diff.csv \
      --csv
