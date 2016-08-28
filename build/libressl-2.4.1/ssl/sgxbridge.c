@@ -371,5 +371,7 @@ sgxbridge_pipe_tls1_enc(SSL *s, size_t len, size_t eivlen,
   sgxbridge_pipe_read(sizeof(int), &sgx_status);
   sgxbridge_pipe_read(*out_len + eivlen, out);
 
+  free(tls1_enc_buf);
+
   return sgx_status;
 }

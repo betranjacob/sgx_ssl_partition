@@ -743,5 +743,7 @@ cmd_sgx_tls1_enc(cmd_pkt_t cmd_pkt, unsigned char *data)
       out_len + sgx_tls1_enc->eivlen);
 
   sgxbridge_pipe_write(buf, buf_sz);
+
+  free(buf);
   debug_fprintf(stdout, "Done\n");
 }
