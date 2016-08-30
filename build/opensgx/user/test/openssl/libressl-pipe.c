@@ -476,7 +476,8 @@ cmd_final_finish_mac(cmd_pkt_t cmd_pkt, unsigned char* data){
   sgxbridge_pipe_write(peer_finish_md, ret ? 2 * EVP_MAX_MD_SIZE : 1);
 }
 
-void cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data)
+void
+cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   const EC_GROUP *group;
   BN_CTX *bn_ctx = NULL;
@@ -560,7 +561,8 @@ void cmd_ecdhe_get_public_param(cmd_pkt_t cmd_pkt, unsigned char* data)
   free(ep);
 }
 
-void cmd_ecdhe_generate_pre_master(cmd_pkt_t cmd_pkt, unsigned char* data)
+void
+cmd_ecdhe_generate_pre_master(cmd_pkt_t cmd_pkt, unsigned char* data)
 {
   EC_POINT *clnt_ecpoint = NULL;
   BN_CTX *bn_ctx = NULL;

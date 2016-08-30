@@ -5,7 +5,6 @@ aead_aes_gcm_seal
 aesni_ctr32_encrypt_blocks
 aesni_encrypt
 aesni_set_encrypt_key
-aesni_set_encrypt_key'2
 ameth_cmp
 ameth_cmp_BSEARCH_CMP_FN
 arc4random_buf
@@ -28,14 +27,10 @@ asn1_i2d_ex_primitive
 ASN1_INTEGER_new
 asn1_item_clear
 asn1_item_combine_free
-asn1_item_combine_free'2
 ASN1_item_d2i
 asn1_item_ex_combine_new
-asn1_item_ex_combine_new'2
 ASN1_item_ex_d2i
-ASN1_item_ex_d2i'2
 ASN1_item_ex_i2d
-ASN1_item_ex_i2d'2
 ASN1_item_ex_new
 asn1_item_flags_i2d
 ASN1_item_free
@@ -51,7 +46,6 @@ ASN1_OCTET_STRING_free
 ASN1_OCTET_STRING_set
 asn1_primitive_clear
 ASN1_primitive_free
-ASN1_primitive_free'2
 ASN1_primitive_new
 asn1_put_length
 ASN1_put_object
@@ -67,15 +61,10 @@ ASN1_STRING_type_new
 ASN1_tag2bit
 asn1_template_clear
 asn1_template_ex_d2i
-asn1_template_ex_d2i'2
 asn1_template_ex_i2d
-asn1_template_ex_i2d'2
 ASN1_template_free
-ASN1_template_free'2
 ASN1_template_new
-ASN1_template_new'2
 asn1_template_noexp_d2i
-asn1_template_noexp_d2i'2
 ASN1_TYPE_new
 ASN1_TYPE_set
 bcmp
@@ -146,7 +135,6 @@ bn_mul_mont
 bn_mul_mont_gather5
 bn_mul_normal
 bn_mul_recursive
-bn_mul_recursive'2
 bn_mul_words
 bn_new
 BN_new
@@ -172,7 +160,6 @@ bn_sqr4x_mont
 bn_sqr_comba4
 bn_sqr_comba8
 bn_sqr_recursive
-bn_sqr_recursive'2
 BN_STACK_finish
 BN_STACK_init
 BN_STACK_pop
@@ -201,7 +188,6 @@ chacha_keysetup
 check_alias
 check_commands
 check_defer
-check_free.isra.0
 check_padding_md
 check_pem
 close
@@ -408,11 +394,9 @@ EVP_des_cbc
 EVP_des_ede3_cbc
 EVP_DigestFinal_ex
 EVP_DigestInit_ex
-EVP_DigestInit_ex'2
 EVP_DigestSignFinal
 EVP_DigestSignInit
 EVP_DigestUpdate
-EVP_DigestUpdate'2
 EVP_dss1
 EVP_ecdsa
 EVP_get_cipherbyname
@@ -425,11 +409,9 @@ EVP_idea_cbc
 EVP_md5
 EVP_MD_block_size
 EVP_MD_CTX_cleanup
-EVP_MD_CTX_cleanup'2
 EVP_MD_CTX_clear_flags
 EVP_MD_CTX_copy
 EVP_MD_CTX_copy_ex
-EVP_MD_CTX_copy_ex'2
 EVP_MD_CTX_init
 EVP_MD_CTX_md
 EVP_MD_CTX_set_flags
@@ -444,7 +426,6 @@ EVP_PKEY_copy_parameters
 EVP_PKEY_CTX_ctrl
 EVP_PKEY_CTX_dup
 EVP_PKEY_CTX_free
-EVP_PKEY_CTX_free'2
 EVP_PKEY_CTX_new
 EVP_PKEY_CTX_new_id
 EVP_PKEY_free
@@ -551,7 +532,6 @@ long_c2i
 main
 main)
 malloc
-malloc'2
 malloc_consolidate
 malloc_hook_ini
 malloc_init_state
@@ -568,8 +548,6 @@ memset
 mkdir
 mknod
 mmap
-msort_with_tmp.part.0
-msort_with_tmp.part.0'2
 munmap
 new_do_write
 OBJ_bsearch_
@@ -629,14 +607,12 @@ print_hex
 print_hex_trim
 pthread_mutex_lock
 pthread_mutex_unlock
-ptmalloc_init.part.7
 pubkey_cb
 qsort
 qsort_r
 RDTSC
 read
 realloc
-realloc'2
 reallocarray
 realloc_hook_ini
 register_command
@@ -692,7 +668,6 @@ sk_new
 sk_new_null
 sk_num
 sk_pop_free
-sk_pop_free'2
 sk_push
 sk_set
 sk_set_cmp_func
@@ -764,7 +739,6 @@ strncpy
 strpbrk
 strsep
 strstr
-systrim.isra.1
 tfind
 time
 timingsafe_memcmp

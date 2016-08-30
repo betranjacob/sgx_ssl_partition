@@ -20,7 +20,8 @@ do
     continue
   fi
 
-  cat $CALLGRIND_FILE | grep "cob\|cfl\|cfn\|fn" | grep " " | grep -o '[^ ]*$' | grep "^[^_0/]" | sort > function_list_${TEST_SUFFIX}_${now}.txt
+# cat $CALLGRIND_FILE | grep "cob\|cfl\|cfn\|fn" | grep " " | grep -o "[^ ]*$" | grep "^[^_0/]" | grep -v "[.?\']" | sort > function_list_${TEST_SUFFIX}_${now}.txt
+cat $CALLGRIND_FILE | grep "cob\|cfl\|cfn\|fn" | grep " " | grep -o "[^ ]*$" | grep "^[^_0/]" | grep -v "[.?\']" | sort > function_list_${TEST_SUFFIX}.txt
 done
 
 cd ..
