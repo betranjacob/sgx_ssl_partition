@@ -2,7 +2,7 @@
 
 # process callgrind file to produce function list
 # ignores all functions starting with _, 0 or /
-# ifnores functions containing ., ?, ' and )
+# ignores functions containing ., ?, ' and )
 
 CALLGRIND_PREFIX=callgrind.out
 declare -a arr=("stock" "outside" "inside")
